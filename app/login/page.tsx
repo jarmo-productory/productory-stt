@@ -6,18 +6,93 @@ import { useRouter } from 'next/navigation';
 import { LoginForm } from '@/components/LoginForm';
 
 export default function LoginPage() {
-  const { user, signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
+  const { user, signInWithGoogle, signInWithEmail, signUpWithEmail, supabase } = useAuth();
   const router = useRouter();
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    // Handle OAuth redirect with token in URL fragment
+    const handleTokenInUrl = async () => {
+      // Check if we have a hash in the URL
+      if (typeof window !== 'undefined' && window.location.hash) {
+        setIsLoading(true);
+        console.log('Found hash in URL:', window.location.hash);
+        
+        // Extract the access token and other parameters from the URL fragment
+        const hashParams = new URLSearchParams(
+          window.location.hash.substring(1) // Remove the # character
+        );
+        
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const expiresIn = hashParams.get('expires_in');
+        const tokenType = hashParams.get('token_type');
+        
+        console.log('Extracted tokens:', { 
+          accessToken: accessToken ? `${accessToken.substring(0, 10)}...` : null,
+          refreshToken: refreshToken ? 'present' : null,
+          expiresIn,
+          tokenType
+        });
+        
+        if (accessToken && refreshToken) {
+          console.log('Found valid tokens in URL, attempting to set session');
+          
+          try {
+            // Set the session with the extracted tokens
+            console.log('Calling supabase.auth.setSession...');
+            const { data, error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken
+            });
+            
+            if (error) {
+              console.error('Error setting session:', error);
+              setError('Failed to authenticate: ' + error.message);
+            } else {
+              console.log('Session response:', { 
+                user: data?.user ? 'present' : null,
+                session: data?.session ? 'present' : null
+              });
+              
+              if (data?.user) {
+                console.log('Session established successfully, redirecting to dashboard');
+                // Clear the hash from the URL to prevent token exposure
+                window.history.replaceState(null, '', window.location.pathname);
+                router.replace('/dashboard');
+                return;
+              } else {
+                console.error('No user returned after setting session');
+                setError('Authentication failed: No user returned');
+              }
+            }
+          } catch (err) {
+            console.error('Exception during authentication:', err);
+            setError('Authentication failed: ' + (err instanceof Error ? err.message : String(err)));
+          }
+        } else {
+          console.error('Missing required tokens in URL fragment');
+          setError('Authentication failed: Missing required tokens');
+        }
+        
+        setIsLoading(false);
+      } else {
+        console.log('No hash found in URL, skipping token processing');
+      }
+    };
+
+    // First check for tokens in URL
+    handleTokenInUrl();
+    
+    // Then check if user is already logged in
     if (user) {
+      console.log('User already logged in, redirecting to dashboard');
       router.replace('/dashboard');
     } else {
       setIsLoading(false);
     }
-  }, [user, router]);
+  }, [user, router, supabase.auth]);
 
   const handleSubmit = async (email: string, password: string, isSignUp: boolean) => {
     setError('');

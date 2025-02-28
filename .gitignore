@@ -27,6 +27,7 @@
 .vscode/
 *.swp
 *.swo
+.cursor/
 
 # debug
 npm-debug.log*

@@ -83,22 +83,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const initializeAuth = async () => {
       try {
         setIsLoading(true);
-        console.log("AuthContext - Starting Try in InitializeAuth!");
+        console.log("AuthContext - Starting initialization");
 
-        // // First, get initial session
+        // First, get initial session
         const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (error || !mounted) {
-          setIsLoading(false);
+        if (error) {
+          console.error("AuthContext - Error getting session:", error);
+          if (mounted) setIsLoading(false);
+          return;
+        }
+
+        if (!mounted) {
+          console.log("AuthContext - Component unmounted during initialization");
           return;
         }
 
         // Update initial state
+        console.log("AuthContext - Session found:", session ? "yes" : "no");
         setSession(session);
         const currentUser = session?.user ?? null;
         setUser(currentUser);
 
         if (currentUser) {
+          console.log("AuthContext - User found, checking subscription");
           await checkSubscription(currentUser.id);
         }
         
@@ -107,6 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           async (_event, newSession) => {
             if (!mounted) return;
             
+            console.log("AuthContext - Auth state changed:", _event);
             const newUser = newSession?.user ?? null;
             setSession(newSession);
             setUser(newUser);
