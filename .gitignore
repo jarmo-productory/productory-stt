@@ -73,3 +73,6 @@ logs
 # Cache directories
 .cache/
 .next/cache/
+
+# Documentation
+.docs/
