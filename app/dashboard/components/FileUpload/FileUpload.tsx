@@ -20,7 +20,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { SelectedFile } from '../utils/types';
 import { 
   formatFileSize, 
-  validateFile
+  validateFile,
+  generateFormattedFilename,
+  extractAudioDuration,
+  saveAudioMetadata
 } from '../utils/fileHelpers';
 
 interface FileUploadProps {
@@ -258,8 +261,7 @@ export function FileUpload({ onUploadComplete, onUploadStart }: FileUploadProps)
     // Process each file
     await Promise.all(
       filesToUpload.map(async (selectedFile, index) => {
-        const fileId = uuidv4();
-        console.log(`Processing file: ${selectedFile.name} (${formatFileSize(selectedFile.size)}) - ID: ${fileId}`);
+        console.log(`Processing file: ${selectedFile.name} (${formatFileSize(selectedFile.size)})`);
         
         // Find the index of the file in the updatedFiles array
         const fileIndex = updatedFiles.findIndex(f => f.name === selectedFile.name && f.size === selectedFile.size);
@@ -272,7 +274,6 @@ export function FileUpload({ onUploadComplete, onUploadStart }: FileUploadProps)
         updatedFiles[fileIndex] = {
           ...updatedFiles[fileIndex],
           status: 'uploading',
-          id: fileId,
           uploadProgress: 0
         };
         
@@ -305,8 +306,45 @@ export function FileUpload({ onUploadComplete, onUploadStart }: FileUploadProps)
             console.error('User ID not found in session');
             throw new Error('Authentication error: User ID not available');
           }
-          const filePath = `audio/${userId}/${fileId}-${file.name}`;
+          
+          // Generate formatted filename with original name, timestamp, and random string
+          const formattedFilename = generateFormattedFilename(file.name);
+          const filePath = `audio/${userId}/${formattedFilename}`;
           console.log(`File path in storage: ${filePath}`);
+          
+          // Extract audio duration before upload
+          console.log('Extracting audio duration...');
+          let audioDuration: number | null = null;
+          try {
+            // Add a check for file size before attempting to extract duration
+            if (file.size > 100 * 1024 * 1024) { // 100MB
+              console.log('Skipping duration extraction for large file');
+              audioDuration = null;
+            } else {
+              // Use a timeout to prevent hanging on problematic files
+              const extractionPromise = extractAudioDuration(file);
+              const timeoutPromise = new Promise<null>((resolve) => {
+                setTimeout(() => {
+                  console.log('Duration extraction timed out');
+                  resolve(null);
+                }, 5000); // 5 second timeout
+              });
+              
+              audioDuration = await Promise.race([extractionPromise, timeoutPromise]);
+              if (audioDuration !== null) {
+                console.log(`Extracted duration: ${audioDuration} seconds`);
+              } else {
+                console.log('Extracted duration: unavailable (using an unsupported codec or format)');
+              }
+            }
+          } catch (durationError) {
+            console.warn('Failed to extract audio duration - continuing upload anyway:', durationError);
+            // Continue with upload even if duration extraction fails
+            audioDuration = null;
+          }
+          
+          // We can still proceed with the upload even without duration
+          console.log('Proceeding with upload' + (audioDuration === null ? ' without duration information' : ''));
           
           // We'll use Supabase's direct upload but track progress with our own events
           // This ensures we get proper progress tracking while still using Supabase's API
@@ -404,6 +442,21 @@ export function FileUpload({ onUploadComplete, onUploadStart }: FileUploadProps)
             errorCount++;
           } else {
             console.log(`File ${selectedFile.name} uploaded successfully:`, uploadResult.data);
+            
+            // Save metadata to the audio_files table
+            console.log('Saving audio metadata to database...');
+            const fileExtension = formattedFilename.split('.').pop()?.toLowerCase() || '';
+            
+            await saveAudioMetadata(
+              userId,
+              formattedFilename,
+              filePath,
+              file.size,
+              audioDuration,
+              fileExtension,
+              'ready',
+              file.name
+            );
             
             // Set to 100% on success
             updatedFiles[fileIndex] = {
@@ -531,18 +584,50 @@ export function FileUpload({ onUploadComplete, onUploadStart }: FileUploadProps)
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/30 rounded-lg flex items-start shadow-sm"
+                    className={`mb-4 p-4 ${
+                      errorMessage.includes('decode audio data') 
+                        ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-900/30'
+                        : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/30'
+                    } rounded-lg flex items-start shadow-sm`}
                   >
-                    <div className="mr-3 flex-shrink-0 w-8 h-8 bg-red-100 dark:bg-red-800/30 rounded-full flex items-center justify-center">
-                      <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400" />
+                    <div className={`mr-3 flex-shrink-0 w-8 h-8 ${
+                      errorMessage.includes('decode audio data')
+                        ? 'bg-yellow-100 dark:bg-yellow-800/30 rounded-full'
+                        : 'bg-red-100 dark:bg-red-800/30 rounded-full'
+                      } flex items-center justify-center`}
+                    >
+                      <AlertCircle className={`h-5 w-5 ${
+                        errorMessage.includes('decode audio data')
+                          ? 'text-yellow-500 dark:text-yellow-400'
+                          : 'text-red-500 dark:text-red-400'
+                      }`} />
                     </div>
                     <div className="flex-grow">
-                      <h4 className="font-medium text-red-800 dark:text-red-300">Upload Error</h4>
-                      <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>
+                      <h4 className={`font-medium ${
+                        errorMessage.includes('decode audio data')
+                          ? 'text-yellow-800 dark:text-yellow-300'
+                          : 'text-red-800 dark:text-red-300'
+                      }`}>
+                        {errorMessage.includes('decode audio data') ? 'Upload Note' : 'Upload Error'}
+                      </h4>
+                      <p className={`text-sm ${
+                        errorMessage.includes('decode audio data')
+                          ? 'text-yellow-600 dark:text-yellow-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }`}>
+                        {errorMessage.includes('decode audio data')
+                          ? 'Unable to extract duration information from this audio format. The file will still be uploaded successfully.'
+                          : errorMessage
+                        }
+                      </p>
                     </div>
                     <button 
                       onClick={() => setErrorMessage('')}
-                      className="p-1 text-red-500 hover:text-red-700 dark:hover:text-red-300"
+                      className={`p-1 ${
+                        errorMessage.includes('decode audio data')
+                          ? 'text-yellow-500 hover:text-yellow-700 dark:hover:text-yellow-300'
+                          : 'text-red-500 hover:text-red-700 dark:hover:text-red-300'
+                      }`}
                     >
                       <X className="h-4 w-4" />
                     </button>

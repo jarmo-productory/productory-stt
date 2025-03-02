@@ -1,4 +1,5 @@
 import { FileValidationResult } from './types';
+import { supabase } from '@/utils/supabase';
 
 // Supported file formats
 export const SUPPORTED_FORMATS = ['.wav', '.mp3', '.m4a', '.flac'];
@@ -52,4 +53,188 @@ export const validateFile = (file: File): FileValidationResult => {
     valid: errors.length === 0,
     errors
   };
+};
+
+/**
+ * Generates a formatted filename with the original name, timestamp, and random string
+ * Format: original_filename-YYYY-MM-DD-HH_MM-XX.ext
+ * @param originalFilename - The original filename
+ * @returns Formatted filename
+ */
+export const generateFormattedFilename = (originalFilename: string): string => {
+  // Extract file extension
+  const lastDotIndex = originalFilename.lastIndexOf('.');
+  const nameWithoutExt = lastDotIndex !== -1 ? originalFilename.substring(0, lastDotIndex) : originalFilename;
+  const extension = lastDotIndex !== -1 ? originalFilename.substring(lastDotIndex) : '';
+  
+  // Generate timestamp in format YYYY-MM-DD-HH_MM
+  const now = new Date();
+  const timestamp = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0')
+  ].join('-') + '-' + [
+    String(now.getHours()).padStart(2, '0'),
+    String(now.getMinutes()).padStart(2, '0')
+  ].join('_');
+  
+  // Generate a two-character random string
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let randomString = '';
+  for (let i = 0; i < 2; i++) {
+    randomString += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  
+  // Combine everything
+  return `${nameWithoutExt}-${timestamp}-${randomString}${extension}`;
+};
+
+// Extract audio duration using Web Audio API
+export const extractAudioDuration = async (file: File): Promise<number | null> => {
+  return new Promise((resolve) => {
+    try {
+      // Check file type and size first - don't attempt to decode very large files
+      if (file.size > 100 * 1024 * 1024) { // 100MB
+        console.warn('Skipping duration extraction for large file:', file.name);
+        resolve(null);
+        return;
+      }
+      
+      // Create an audio context
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) {
+        console.warn('AudioContext not supported in this browser');
+        resolve(null);
+        return;
+      }
+      
+      const audioContext = new AudioContext();
+      
+      // Create a file reader to read the file as an ArrayBuffer
+      const reader = new FileReader();
+      
+      reader.onload = async (event) => {
+        try {
+          // Get the ArrayBuffer from the FileReader result
+          const arrayBuffer = event.target?.result as ArrayBuffer;
+          
+          if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+            console.warn('Empty audio buffer');
+            resolve(null);
+            return;
+          }
+          
+          // Add a timeout to prevent hanging on problematic files
+          const timeoutPromise = new Promise<null>((resolveTimeout) => {
+            setTimeout(() => {
+              console.warn('Audio decoding timed out');
+              resolveTimeout(null);
+            }, 5000); // 5 second timeout
+          });
+          
+          // Try to decode with timeout
+          try {
+            const decodePromise = audioContext.decodeAudioData(arrayBuffer)
+              .then(audioBuffer => {
+                const durationSeconds = audioBuffer.duration;
+                console.log(`Extracted audio duration: ${durationSeconds} seconds`);
+                return durationSeconds;
+              })
+              .catch(error => {
+                // Log as warning instead of error to prevent it from appearing as a red error in the UI
+                console.warn('Could not extract audio duration - file may use an unsupported codec', {
+                  fileName: file.name,
+                  fileType: file.type,
+                  fileSize: formatFileSize(file.size),
+                  error: error.message || 'Unknown decoding error'
+                });
+                return null;
+              });
+            
+            // Race between decoding and timeout
+            const result = await Promise.race([decodePromise, timeoutPromise]);
+            resolve(result);
+          } catch (decodeError) {
+            console.warn('Exception during audio decoding - continuing upload without duration', {
+              fileName: file.name,
+              fileType: file.type,
+              error: decodeError
+            });
+            resolve(null);
+          }
+        } catch (error) {
+          console.warn('Error processing ArrayBuffer - continuing upload without duration', {
+            fileName: file.name,
+            error: error
+          });
+          resolve(null);
+        }
+      };
+      
+      reader.onerror = () => {
+        console.warn('Error reading file for duration extraction - continuing upload without duration', {
+          fileName: file.name,
+          fileSize: formatFileSize(file.size),
+          fileType: file.type
+        });
+        resolve(null);
+      };
+      
+      // Read the file as an ArrayBuffer
+      reader.readAsArrayBuffer(file);
+    } catch (error) {
+      console.warn('Error extracting audio duration - continuing upload without duration', {
+        fileName: file.name,
+        error: error
+      });
+      resolve(null);
+    }
+  });
+};
+
+// Save audio metadata to the database
+export const saveAudioMetadata = async (
+  userId: string,
+  fileName: string,
+  filePath: string,
+  fileSize: number,
+  duration: number | null,
+  format: string,
+  status: string = 'ready',
+  originalFilename: string = ''
+) => {
+  try {
+    console.log(`Saving metadata: file=${fileName}, size=${fileSize}, duration=${duration || 'unknown'}`);
+    
+    // Create metadata object with additional info
+    const metadata = {
+      original_filename: originalFilename || fileName,
+      duration_extraction_status: duration === null ? 'failed' : 'success',
+      upload_timestamp: new Date().toISOString()
+    };
+    
+    const { error } = await supabase.from('audio_files').insert({
+      user_id: userId,
+      file_name: fileName,
+      file_path: filePath,
+      size: fileSize,
+      duration: duration, // This can be null, which is fine
+      format: format,
+      status: status,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      metadata: metadata
+    });
+    
+    if (error) {
+      console.error('Error saving audio metadata:', error);
+      return false;
+    }
+    
+    console.log('Audio metadata saved successfully');
+    return true;
+  } catch (error) {
+    console.error('Exception saving audio metadata:', error);
+    return false;
+  }
 }; 

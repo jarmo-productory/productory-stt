@@ -13,7 +13,6 @@ export interface SelectedFile {
   size: number;
   type: string;
   // Status tracking
-  id?: string;
   status: 'queued' | 'uploading' | 'success' | 'error';
   uploadProgress: number;
   errorMessage?: string;

@@ -59,11 +59,12 @@ export default function Dashboard() {
       validUntil: subscription?.current_period_end
     });
 
+    // TEMPORARILY DISABLED: Allow access even with expired trial
     // Only redirect if there's no valid subscription AND no valid trial
-    if (!hasValidSubscription && !isInTrial) {
-      console.log('No valid subscription or trial, redirecting');
-      router.replace('/profile');
-    }
+    // if (!hasValidSubscription && !isInTrial) {
+    //   console.log('No valid subscription or trial, redirecting');
+    //   router.replace('/profile');
+    // }
   }, [subscription, isSubLoading, isTrialLoading, router, isInTrial]);
 
   // Second check - Auth check
@@ -80,9 +81,9 @@ export default function Dashboard() {
     if (!hasCheckedSubscription) {
       setHasCheckedSubscription(true);
       
-      // Allow access for both subscribers and trial users
-      if (!user || (!isSubscriber && !isInTrial && !isAuthLoading)) {
-        console.log('No valid subscription or trial, redirecting');
+      // MODIFIED: Only check for user authentication, not subscription status
+      if (!user) {
+        console.log('No user authenticated, redirecting');
         router.replace('/profile');
       }
     }
@@ -193,6 +194,28 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Trial Expired Warning Banner */}
+      {!isInTrial && !['active', 'trialing'].includes(subscription?.status || '') && (
+        <div className="bg-yellow-100 dark:bg-yellow-900/30 border-b border-yellow-200 dark:border-yellow-800">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-500 mr-2" />
+                <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                  Your trial period has expired. Please subscribe to continue using all features.
+                </p>
+              </div>
+              <button
+                onClick={() => router.push('/profile')}
+                className="ml-4 px-3 py-1 text-xs font-medium text-yellow-800 dark:text-yellow-300 bg-yellow-200 dark:bg-yellow-800/50 rounded-md hover:bg-yellow-300 dark:hover:bg-yellow-800 transition-colors"
+              >
+                Subscribe Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dashboard Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
