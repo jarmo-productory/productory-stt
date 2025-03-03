@@ -29,7 +29,7 @@ export function AccountManagement() {
       }
       
       await signOut();
-      router.push('/login');
+      window.location.href = '/';
     } catch (error) {
       console.error('Delete account error:', error);
       setError(error instanceof Error ? error.message : 'Failed to delete account');

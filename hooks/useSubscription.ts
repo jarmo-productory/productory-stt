@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSupabase } from './useSupabase';
 import debounce from 'lodash/debounce';
 
 export interface Subscription {
@@ -17,7 +18,8 @@ export interface Subscription {
 }
 
 export function useSubscription() {
-  const { user, supabase } = useAuth();
+  const { user } = useAuth();
+  const supabase = useSupabase();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

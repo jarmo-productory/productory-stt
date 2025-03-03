@@ -171,9 +171,12 @@ yarn dev
 │   ├── reset-password/   # Reset password pages
 │   ├── update-password/  # Update password pages
 │   ├── verify-email/     # Verify email pages
+│   ├── components/       # App-specific components
+│   │   └── layout/       # Layout components (AppLayout, Breadcrumbs, etc.)
 │   ├── layout.tsx        # Root layout
 │   └── page.tsx          # Home page
 ├── components/           # Reusable components
+│   └── ui/               # UI primitives (ShadCN components)
 ├── contexts/             # React contexts
 ├── hooks/                # Custom React hooks
 ├── utils/                # Utility functions
@@ -181,6 +184,43 @@ yarn dev
 ├── public/               # Static assets
 └── styles/               # Global styles
 ```
+
+## 🧩 Component Organization Guidelines
+
+To maintain consistency and avoid duplication, follow these component organization guidelines:
+
+### UI Component Structure
+
+- **`/components/ui/`**: Contains all ShadCN UI primitive components (buttons, cards, dialogs, etc.)
+  - Always import ShadCN components from this location: `import { Button } from "@/components/ui/button"`
+  - Use ShadCN's naming convention: lowercase filenames (e.g., `button.tsx`, `card.tsx`)
+  - Always add new ShadCN components using `npx shadcn@latest add <component>`
+
+- **`/app/components/`**: App-specific shared components
+  - Layout components (AppLayout, Breadcrumbs)
+  - Domain-specific reusable components
+  - Follow PascalCase naming convention (e.g., `AppLayout.tsx`)
+
+- **`/app/[feature]/components/`**: Feature-specific components
+  - Components only used within a specific feature
+  - Follow PascalCase naming convention
+
+### Component Naming Conventions
+
+- ShadCN UI components: lowercase, kebab-case (e.g., `button.tsx`, `calendar.tsx`)
+- All other components: PascalCase (e.g., `AppLayout.tsx`, `UserProfile.tsx`)
+
+### Preventing Duplication
+
+- Before creating a new component, check if a similar one already exists
+- Use tooling (ESLint, import helpers) to enforce correct import paths
+- Follow code reviews to catch component organization issues early
+
+### Import Conventions
+
+- ShadCN UI components: `import { ComponentName } from "@/components/ui/component-name"`
+- App components: `import { ComponentName } from "@/app/components/ComponentName"`
+- Feature components: `import { ComponentName } from "@/app/[feature]/components/ComponentName"`
 
 ## 🛠️ Built With
 

@@ -1,275 +1,190 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { supabase } from '@/utils/supabase';
-import { 
-  Session, 
-  User, 
-  SupabaseClient, 
-  AuthTokenResponse 
-} from '@supabase/supabase-js';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { User, Session, AuthError } from '@supabase/supabase-js';
+import { useSupabase } from '@/hooks/useSupabase';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
-  supabase: SupabaseClient;
+  error: string | null;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
-  signInWithEmail: (email: string, password: string) => Promise<{
-    user: User | null;
-    session: Session | null;
-  }>;
   signOut: () => Promise<void>;
-  signUpWithEmail: (email: string, password: string) => Promise<{ 
-    data: { user: User | null } | null; 
-    error: Error | null;
-  }>;
-  updatePassword: (newPassword: string) => Promise<void>;
-  updateEmail: (newEmail: string) => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
-  isSubscriber: boolean;
+  checkAuthStatus: () => Promise<boolean>;
 }
 
-const AuthContext = createContext<AuthContextType>({} as AuthContextType);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-interface SubscriptionPayload {
-  new: {
-    user_id: string;
-    [key: string]: any;
-  };
-}
-
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubscriber, setIsSubscriber] = useState(false);
-
-  const checkSubscription = useCallback(async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('user_id', userId)
-        .in('status', ['active', 'trialing'])
-        .order('created_at', { ascending: false })
-        .maybeSingle();
-      
-      if (error) {
-        console.error('Subscription check error:', error);
-        setIsSubscriber(false);
-        return;
-      }
-
-      // console.log("AuthContext - subscription data: ", data)
-
-      const isValid = data && 
-        ['active', 'trialing'].includes(data.status) && 
-        new Date(data.current_period_end) > new Date();
-      // console.log("AuthContext -  isValid: ", data)
-
-      setIsSubscriber(!!isValid);
-      console.log("AuthContext -  set isSubscriber: ", isSubscriber)
-    } catch (error) {
-      console.error('Subscription check error:', error);
-      setIsSubscriber(false);
-    }
-  }, []);
-
+  const [error, setError] = useState<string | null>(null);
+  
+  const supabase = useSupabase();
+  
+  // Initialize user session from Supabase
   useEffect(() => {
-    let mounted = true;
-    console.log("AuthContext - mounted useEffect:", mounted);
-    
     const initializeAuth = async () => {
       try {
         setIsLoading(true);
-        console.log("AuthContext - Starting initialization");
-
-        // First, get initial session
+        
+        // Get session from Supabase
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
-          console.error("AuthContext - Error getting session:", error);
-          if (mounted) setIsLoading(false);
-          return;
-        }
-
-        if (!mounted) {
-          console.log("AuthContext - Component unmounted during initialization");
-          return;
-        }
-
-        // Update initial state
-        console.log("AuthContext - Session found:", session ? "yes" : "no");
-        setSession(session);
-        const currentUser = session?.user ?? null;
-        setUser(currentUser);
-
-        if (currentUser) {
-          console.log("AuthContext - User found, checking subscription");
-          await checkSubscription(currentUser.id);
+          throw error;
         }
         
-        // Then set up listener for future changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          async (_event, newSession) => {
-            if (!mounted) return;
-            
-            console.log("AuthContext - Auth state changed:", _event);
-            const newUser = newSession?.user ?? null;
-            setSession(newSession);
-            setUser(newUser);
-            
-            if (newUser) {
-              await checkSubscription(newUser.id);
-            } else {
-              setIsSubscriber(false);
-            }
-          }
-        );
-
-        // Only set loading to false after everything is initialized
-        if (mounted) setIsLoading(false);
-        
-        return () => {
-          mounted = false;
-          subscription.unsubscribe();
-        };
+        if (session) {
+          setSession(session);
+          setUser(session.user);
+        }
       } catch (error) {
-        console.error("Auth initialization error:", error);
-        if (mounted) setIsLoading(false);
+        console.error('Error initializing auth:', error);
+        setError(error instanceof Error ? error.message : 'Authentication failed');
+      } finally {
+        setIsLoading(false);
       }
     };
-
+    
     initializeAuth();
-  }, [checkSubscription]);
-
+    
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        console.log('[AuthContext] Auth state changed, updating context');
+        setSession(session);
+        setUser(session?.user ?? null);
+      }
+    );
+    
+    // Clean up subscription on unmount
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+  
+  // Sign in with email and password
+  const signInWithEmail = async (email: string, password: string) => {
+    try {
+      setError(null);
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error) {
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error signing in with email:', error);
+      setError(error instanceof Error ? error.message : 'Sign in failed');
+      throw error;
+    }
+  };
+  
+  // Sign up with email and password
+  const signUpWithEmail = async (email: string, password: string) => {
+    try {
+      setError(null);
+      const { error } = await supabase.auth.signUp({ email, password });
+      
+      if (error) {
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error signing up with email:', error);
+      setError(error instanceof Error ? error.message : 'Sign up failed');
+      throw error;
+    }
+  };
+  
+  // Sign in with Google
+  const signInWithGoogle = async () => {
+    try {
+      setError(null);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      
+      if (error) {
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error signing in with Google:', error);
+      setError(error instanceof Error ? error.message : 'Google sign in failed');
+      throw error;
+    }
+  };
+  
+  // Sign out
+  const signOut = async () => {
+    try {
+      setError(null);
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Clear user and session state
+      setUser(null);
+      setSession(null);
+      
+      // Redirect to login page after signing out
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Error signing out:', error);
+      setError(error instanceof Error ? error.message : 'Sign out failed');
+      throw error;
+    }
+  };
+  
+  // Check auth status via API for server-client synchronization
+  const checkAuthStatus = async (): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/verify-auth', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const data = await response.json();
+      
+      return data.authenticated === true;
+    } catch (error) {
+      console.error('Error checking auth status:', error);
+      return false;
+    }
+  };
+  
   const value = {
     user,
     session,
     isLoading,
-    supabase,
-    signInWithGoogle: async () => {
-      await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`
-        }
-      });
-    },
-    signInWithEmail: async (email: string, password: string) => {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-      
-      if (authError) throw authError;
-
-      // Check if user was previously soft-deleted
-      const { data: profile } = await supabase
-        .from('users')
-        .select('is_deleted, deleted_at')
-        .eq('id', authData.user?.id)
-        .single();
-
-      if (profile?.is_deleted) {
-        // Reactivate the account
-        await supabase
-          .from('users')
-          .update({ 
-            is_deleted: false, 
-            deleted_at: null,
-            reactivated_at: new Date().toISOString() 
-          })
-          .eq('id', authData.user?.id);
-
-        // You could trigger a welcome back notification here
-      }
-
-      return authData;
-    },
-    signOut: async () => {
-      try {
-        // First cleanup all active connections/states
-        window.dispatchEvent(new Event('cleanup-before-logout'));
-        
-        // Wait a small amount of time for cleanup
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Then perform the actual signout
-        await supabase.auth.signOut();
-        
-        // Force redirect to login
-        window.location.assign('/login');
-      } catch (error) {
-        console.error('Error signing out:', error);
-      }
-    },
-    signUpWithEmail: async (email: string, password: string) => {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`
-        }
-      });
-      if (error) throw error;
-      return { data, error };
-    },
-    updatePassword: async (newPassword: string) => {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-      if (error) throw error;
-    },
-    updateEmail: async (newEmail: string) => {
-      const { error } = await supabase.auth.updateUser({
-        email: newEmail
-      });
-      if (error) throw error;
-    },
-    resetPassword: async (email: string) => {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/update-password`
-      });
-      if (error) throw error;
-    },
-    deleteAccount: async () => {
-      // First delete user data from any related tables
-      const { error: dataError } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', user?.id);
-      
-      if (dataError) throw dataError;
-
-      // Then delete the user's subscription if it exists
-      const { error: subscriptionError } = await supabase
-        .from('subscriptions')
-        .delete()
-        .eq('user_id', user?.id);
-
-      if (subscriptionError) throw subscriptionError;
-
-      // Finally delete the user's auth account
-      const { error: authError } = await supabase.auth.admin.deleteUser(
-        user?.id as string
-      );
-
-      if (authError) throw authError;
-
-      // Sign out after successful deletion
-      await supabase.auth.signOut();
-    },
-    isSubscriber,
+    error,
+    signInWithEmail,
+    signUpWithEmail,
+    signInWithGoogle,
+    signOut,
+    checkAuthStatus,
   };
-
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export const useAuth = () => useContext(AuthContext); 
+// Hook for using auth context
+export function useAuth() {
+  const context = useContext(AuthContext);
+  
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  
+  return context;
+} 

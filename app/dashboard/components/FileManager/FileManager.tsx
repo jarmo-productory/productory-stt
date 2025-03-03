@@ -179,40 +179,30 @@ export function FileManager({ refreshTrigger }: FileManagerProps) {
         // Continue anyway - we'll just show Unknown for durations
       }
       
-      // Create a map of file paths to metadata for easier lookup
-      const metadataMap = new Map();
-      if (audioMetadata) {
-        audioMetadata.forEach(item => {
-          metadataMap.set(item.file_path, item);
+      // Map the storage files with the metadata
+      const files: FileObject[] = fileList
+        .filter(item => !item.id.endsWith('/')) // Filter out folders
+        .map(item => {
+          // Find matching metadata
+          const metadata = audioMetadata?.find(meta => 
+            meta.file_path === item.name || // Match by file_path
+            meta.file_name === item.name.split('/').pop() // Or by file_name
+          );
+          
+          return {
+            id: metadata?.id || item.id,
+            name: metadata?.file_name || item.name.split('/').pop() || 'Unknown',
+            storage_name: item.name,
+            size: item.metadata?.size || 0,
+            created_at: metadata?.created_at || item.created_at || new Date().toISOString(),
+            duration: metadata?.duration || 0,
+            status: metadata?.status || 'ready',
+            metadata: metadata?.metadata || {}
+          };
         });
-      }
       
-      // Transform files
-      const transformedFiles = fileList?.map(file => {
-        // Path format in storage is audio/{userId}/{fileName}
-        const filePath = `audio/${user.id}/${file.name}`;
-        const metadata = metadataMap.get(filePath);
-        
-        return {
-          id: file.id,
-          name: metadata?.metadata?.original_filename || file.name, // Use original filename if available
-          storage_name: file.name, // Keep the storage name for operations
-          size: file.metadata?.size || 0,
-          created_at: file.created_at || new Date().toISOString(),
-          // Use real duration from database if available
-          duration: metadata?.duration || undefined,
-          // Use real status from database if available
-          status: (metadata?.status as FileObject['status']) || 'ready',
-          metadata: {
-            ...file.metadata,
-            // Add any additional metadata from our table
-            ...(metadata?.metadata || {})
-          }
-        };
-      }) || [];
-      
-      dispatch({ type: 'FETCH_SUCCESS', payload: transformedFiles });
-      console.log(`Successfully loaded ${transformedFiles.length} files`);
+      dispatch({ type: 'FETCH_SUCCESS', payload: files });
+      console.log(`Successfully loaded ${files.length} files`);
     } catch (error) {
       console.error('Unexpected error fetching files:', error);
       dispatch({ type: 'FETCH_ERROR', payload: 'An unexpected error occurred while loading your files.' });
@@ -341,47 +331,15 @@ export function FileManager({ refreshTrigger }: FileManagerProps) {
     if (!user) return false;
     
     try {
-      const storageFileName = file.storage_name || file.name;
-      console.log(`Attempting to rename file from ${storageFileName} to ${newName}`);
-      
-      // Get the current path and new path
-      const currentPath = `audio/${user.id}/${storageFileName}`;
-      const newPath = `audio/${user.id}/${newName}`;
-      
-      // Use Supabase's move functionality
+      // Update in database
       const { error } = await supabase
-        .storage
-        .from('audio-files')
-        .move(currentPath, newPath);
+        .from('audio_files')
+        .update({ file_name: newName }) // Use file_name instead of name
+        .eq('id', file.id)
+        .eq('user_id', user.id);
       
       if (error) {
-        console.error('Error renaming file:', error);
-        return false;
-      }
-      
-      // Update the metadata in the database
-      // Get the existing record first
-      const { data: existingMetadata, error: fetchError } = await supabase
-        .from('audio_files')
-        .select('*')
-        .eq('file_path', currentPath)
-        .single();
-        
-      if (!fetchError && existingMetadata) {
-        // Update the record with the new file path and name
-        const { error: updateError } = await supabase
-          .from('audio_files')
-          .update({
-            file_name: newName,
-            file_path: newPath,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingMetadata.id);
-          
-        if (updateError) {
-          console.error('Error updating metadata in database:', updateError);
-          // We don't fail the whole operation if just the metadata update fails
-        }
+        throw error;
       }
       
       // Update state

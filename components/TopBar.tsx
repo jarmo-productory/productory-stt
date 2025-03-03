@@ -38,8 +38,8 @@ export default function TopBar() {
     try {
       setIsLoggingOut(true);
       await signOut();
+      // The signOut function now handles redirection to the login page
       setIsDropdownOpen(false);
-      setIsLoggingOut(false);
     } catch (error) {
       console.error('Logout failed:', error);
       alert('Failed to sign out. Please try again.');

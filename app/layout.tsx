@@ -1,35 +1,26 @@
-'use client';
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import { ClientLayout } from './components/layout/ClientLayout';
 
-import { Geist } from "next/font/google";
-import "./globals.css";
-import { AuthProvider } from '@/contexts/AuthContext';
-import TopBar from '../components/TopBar';
-import ProtectedRoute from '@/contexts/ProtectedRoute';
-import { Analytics } from "@vercel/analytics/react"
-// import { PostHogProvider } from '@/contexts/PostHogContext';
-// import { PostHogErrorBoundary } from '@/components/PostHogErrorBoundary';
+const inter = Inter({ subsets: ['latin'] });
 
-const geist = Geist({ subsets: ['latin'] });
+export const metadata: Metadata = {
+  title: 'Productory STT',
+  description: 'Estonian speech-to-text transcription',
+};
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en">
-      <body className={geist.className}>
-        <Analytics mode="auto" />
-        {/* <PostHogErrorBoundary>
-          <PostHogProvider> */}
-            <AuthProvider>   
-                <ProtectedRoute>
-                  <TopBar />    
-                  <main>{children}</main>
-                </ProtectedRoute>
-            </AuthProvider>
-          {/* </PostHogProvider>
-        </PostHogErrorBoundary> */}
+    <html lang="et">
+      <body className={inter.className}>
+        <ClientLayout>
+          {children}
+        </ClientLayout>
       </body>
     </html>
   );
