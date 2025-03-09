@@ -1,5 +1,6 @@
 import { FileValidationResult } from './types';
 import { supabase } from '@/utils/supabase';
+import { storagePathUtil } from '@/lib/utils/storage';
 
 // Supported file formats
 export const SUPPORTED_FORMATS = ['.wav', '.mp3', '.m4a', '.flac'];
@@ -56,37 +57,12 @@ export const validateFile = (file: File): FileValidationResult => {
 };
 
 /**
- * Generates a formatted filename with the original name, timestamp, and random string
- * Format: original_filename-YYYY-MM-DD-HH_MM-XX.ext
+ * Generates a formatted filename for storage
  * @param originalFilename - The original filename
- * @returns Formatted filename
+ * @returns A formatted filename with timestamp and random string
  */
 export const generateFormattedFilename = (originalFilename: string): string => {
-  // Extract file extension
-  const lastDotIndex = originalFilename.lastIndexOf('.');
-  const nameWithoutExt = lastDotIndex !== -1 ? originalFilename.substring(0, lastDotIndex) : originalFilename;
-  const extension = lastDotIndex !== -1 ? originalFilename.substring(lastDotIndex) : '';
-  
-  // Generate timestamp in format YYYY-MM-DD-HH_MM
-  const now = new Date();
-  const timestamp = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0')
-  ].join('-') + '-' + [
-    String(now.getHours()).padStart(2, '0'),
-    String(now.getMinutes()).padStart(2, '0')
-  ].join('_');
-  
-  // Generate a two-character random string
-  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let randomString = '';
-  for (let i = 0; i < 2; i++) {
-    randomString += characters.charAt(Math.floor(Math.random() * characters.length));
-  }
-  
-  // Combine everything
-  return `${nameWithoutExt}-${timestamp}-${randomString}${extension}`;
+  return storagePathUtil.generateFormattedFilename(originalFilename);
 };
 
 // Extract audio duration using Web Audio API

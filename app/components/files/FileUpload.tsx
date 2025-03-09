@@ -19,6 +19,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { storagePathUtil } from "@/lib/utils/storage";
 
 // Supported file formats
 const SUPPORTED_FORMATS = ['.wav', '.mp3', '.m4a', '.flac'];
@@ -85,45 +86,78 @@ const validateFile = (file: File): FileValidationResult => {
 
 // Generate formatted filename
 const generateFormattedFilename = (originalFilename: string): string => {
-  const timestamp = new Date().toISOString().replace(/[-:.]/g, '');
-  const randomId = uuidv4().substring(0, 8);
-  
-  // Extract file extension
-  const fileExtension = originalFilename.includes('.')
-    ? '.' + originalFilename.split('.').pop()?.toLowerCase()
-    : '';
-  
-  // Create a sanitized base name from the original filename
-  // Remove extension, replace spaces and special chars with underscores
-  const baseName = originalFilename
-    .substring(0, originalFilename.lastIndexOf('.'))
-    .replace(/[^a-zA-Z0-9]/g, '_')
-    .substring(0, 30); // Limit length
-  
-  return `${baseName}_${timestamp}_${randomId}${fileExtension}`;
+  return storagePathUtil.generateFormattedFilename(originalFilename);
 };
 
 // Extract audio duration
 const extractAudioDuration = async (file: File): Promise<number | null> => {
+  // For large files or unsupported formats, skip duration extraction to avoid errors
+  if (file.size > 100 * 1024 * 1024) { // Skip files larger than 100MB
+    console.log(`Skipping duration extraction for large file: ${file.name} (${formatFileSize(file.size)})`);
+    return null;
+  }
+  
+  // Check if the file type is supported for audio playback
+  const supportedTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-m4a', 'audio/aac', 'audio/ogg'];
+  if (!supportedTypes.includes(file.type)) {
+    console.log(`Skipping duration extraction for unsupported file type: ${file.type}`);
+    return null;
+  }
+  
   return new Promise((resolve) => {
     try {
       const audio = new Audio();
       const objectUrl = URL.createObjectURL(file);
       
-      audio.addEventListener('loadedmetadata', () => {
+      // Set a timeout to ensure the blob URL is revoked even if events don't fire
+      const timeoutId = setTimeout(() => {
         URL.revokeObjectURL(objectUrl);
-        resolve(audio.duration);
-      });
+        console.log('Revoked blob URL due to timeout');
+        
+        // Clean up audio element
+        audio.src = '';
+        audio.load();
+        
+        resolve(null);
+      }, 3000); // 3 second timeout
+      
+      audio.addEventListener('loadedmetadata', () => {
+        clearTimeout(timeoutId);
+        const duration = audio.duration;
+        
+        // Revoke the blob URL immediately
+        URL.revokeObjectURL(objectUrl);
+        console.log('Revoked blob URL after loadedmetadata');
+        
+        // Clean up audio element
+        audio.src = '';
+        audio.load();
+        
+        resolve(duration);
+      }, { once: true }); // Use once: true to ensure the event listener is removed after it fires
       
       audio.addEventListener('error', () => {
+        clearTimeout(timeoutId);
+        
+        // Don't log the error to avoid console spam
+        // Just silently handle it and return null
+        
+        // Revoke the blob URL immediately
         URL.revokeObjectURL(objectUrl);
-        console.error('Error loading audio file for duration extraction');
+        console.log('Revoked blob URL after error');
+        
+        // Clean up audio element
+        audio.src = '';
+        audio.load();
+        
         resolve(null);
-      });
+      }, { once: true }); // Use once: true to ensure the event listener is removed after it fires
       
+      // Set the source last
       audio.src = objectUrl;
+      audio.preload = 'metadata'; // Only load metadata, not the entire file
     } catch (error) {
-      console.error('Error extracting audio duration:', error);
+      console.log('Error in duration extraction setup, skipping:', error);
       resolve(null);
     }
   });
@@ -134,6 +168,7 @@ interface FileUploadProps {
   onUploadComplete?: () => void;
   onUploadStart?: () => void;
   className?: string;
+  uploadContext?: string;
 }
 
 export function FileUpload({
@@ -141,6 +176,7 @@ export function FileUpload({
   onUploadComplete,
   onUploadStart,
   className = '',
+  uploadContext
 }: FileUploadProps) {
   const { user } = useAuth();
   const supabase = useSupabase();
@@ -154,6 +190,9 @@ export function FileUpload({
   const [errorMessage, setErrorMessage] = useState('');
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Add a flag to control whether to extract duration
+  const EXTRACT_DURATION = false; // Set to false to skip duration extraction completely
 
   // Handle file selection with validation
   const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
@@ -271,151 +310,163 @@ export function FileUpload({
     }
   };
 
+  // Add a method to clear selected files
+  const clearSelectedFiles = () => {
+    setSelectedFiles([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   // Upload all valid files
   const uploadFiles = async () => {
-    if (!user) {
-      setErrorMessage('You must be logged in to upload files');
-      return;
-    }
+    if (selectedFiles.length === 0) return;
     
-    const validFiles = selectedFiles.filter(file => file.status === 'queued');
-    
-    if (validFiles.length === 0) {
-      setErrorMessage('No valid files to upload');
-      return;
-    }
-    
+    console.log('Starting upload process for', selectedFiles.length, 'files');
     setIsUploading(true);
-    setErrorMessage('');
     
     if (onUploadStart) {
       onUploadStart();
     }
     
-    // Log the folder ID for debugging
-    console.log(`Uploading files to folder: ${folderId || 'root'}`);
+    let successCount = 0;
     
-    // Track completed uploads
-    let completedUploads = 0;
-    let successfulUploads = 0;
-    
-    // Process each file
     for (let i = 0; i < selectedFiles.length; i++) {
-      const selectedFile = selectedFiles[i];
+      const fileObj = selectedFiles[i];
       
-      // Skip files that are not queued
-      if (selectedFile.status !== 'queued') {
-        completedUploads++;
-        continue;
-      }
+      // Skip files with errors
+      if (fileObj.status === 'error') continue;
       
-      // Update file status to uploading
-      setSelectedFiles(prevFiles => {
-        const newFiles = [...prevFiles];
-        newFiles[i] = {
-          ...newFiles[i],
-          status: 'uploading',
-          uploadProgress: 0
-        };
-        return newFiles;
+      // Update status to uploading
+      setSelectedFiles(prev => {
+        const updated = [...prev];
+        updated[i] = { ...updated[i], status: 'uploading', uploadProgress: 0 };
+        return updated;
       });
       
       try {
-        // Generate a formatted filename for storage
-        const formattedFilename = generateFormattedFilename(selectedFile.name);
+        console.log(`Processing file ${i+1}/${selectedFiles.length}: ${fileObj.name}`);
         
-        // Extract audio duration
-        const duration = await extractAudioDuration(selectedFile.file);
+        // Extract audio duration only if enabled
+        let duration = null;
+        if (EXTRACT_DURATION) {
+          try {
+            duration = await extractAudioDuration(fileObj.file);
+            if (duration) {
+              console.log(`Extracted duration for ${fileObj.name}: ${duration} seconds`);
+            } else {
+              console.log(`Could not extract duration for ${fileObj.name}, using null`);
+            }
+          } catch (err) {
+            console.warn(`Could not extract duration for ${fileObj.name}:`, err);
+          }
+        } else {
+          console.log(`Duration extraction disabled, using null for ${fileObj.name}`);
+        }
         
-        // Upload the file to Supabase Storage
-        const { data, error } = await supabase.storage
+        // Generate a formatted filename
+        const formattedFilename = generateFormattedFilename(fileObj.name);
+        console.log(`Generated formatted filename: ${formattedFilename}`);
+        
+        // Construct the storage path
+        const userId = user?.id;
+        if (!userId) {
+          throw new Error('User ID is required for upload');
+        }
+        
+        // Get the audio path using the storage path utility
+        const audioPath = storagePathUtil.getAudioPath(userId, formattedFilename);
+        console.log(`Constructed audio path: ${audioPath}`);
+        
+        // Upload to Supabase Storage
+        const { data: storageData, error: storageError } = await supabase.storage
           .from('audio-files')
-          .upload(`${user.id}/${formattedFilename}`, selectedFile.file, {
+          .upload(audioPath, fileObj.file, {
             cacheControl: '3600',
             upsert: false
           });
         
-        if (error) {
-          throw error;
+        if (storageError) {
+          throw storageError;
         }
         
-        // Save file metadata to the database
-        const { data: fileData, error: fileError } = await supabase
+        console.log(`File uploaded to storage: ${storageData.path}`);
+        
+        // Save metadata to database
+        const { data: dbData, error: dbError } = await supabase
           .from('audio_files')
           .insert({
-            user_id: user.id,
-            file_name: selectedFile.name,
+            user_id: userId,
+            file_name: fileObj.name,
             file_path: formattedFilename,
-            size: selectedFile.file.size,
-            duration: duration || 0,
+            size: fileObj.size,
+            duration: duration,
             status: 'ready',
-            format: selectedFile.file.type.split('/')[1] || 'unknown',
+            format: fileObj.type.split('/')[1],
             folder_id: folderId,
             metadata: {
-              original_filename: selectedFile.name,
-              mime_type: selectedFile.file.type
+              original_filename: fileObj.name,
+              mime_type: fileObj.type
             }
           })
           .select();
         
-        if (fileError) {
-          throw fileError;
+        if (dbError) {
+          throw dbError;
         }
         
-        // Update file status to success
-        setSelectedFiles(prevFiles => {
-          const newFiles = [...prevFiles];
-          newFiles[i] = {
-            ...newFiles[i],
-            status: 'success',
-            uploadProgress: 100
-          };
-          return newFiles;
+        console.log(`File metadata saved to database:`, dbData);
+        
+        // Update status to success
+        setSelectedFiles(prev => {
+          const updated = [...prev];
+          updated[i] = { ...updated[i], status: 'success' };
+          return updated;
         });
         
-        successfulUploads++;
+        successCount++;
       } catch (err: any) {
-        console.error('Error uploading file:', err);
+        console.error(`Error uploading file ${fileObj.name}:`, err);
         
-        // Update file status to error
-        setSelectedFiles(prevFiles => {
-          const newFiles = [...prevFiles];
-          newFiles[i] = {
-            ...newFiles[i],
-            status: 'error',
-            errorMessage: err.message || 'Upload failed'
+        // Update status to error
+        setSelectedFiles(prev => {
+          const updated = [...prev];
+          updated[i] = { 
+            ...updated[i], 
+            status: 'error', 
+            errorMessage: err.message || 'Upload failed' 
           };
-          return newFiles;
+          return updated;
         });
-      } finally {
-        completedUploads++;
-        
-        // Check if all uploads are complete
-        if (completedUploads === selectedFiles.length) {
-          setIsUploading(false);
-          
-          if (successfulUploads > 0) {
-            setSuccessMessage(`Successfully uploaded ${successfulUploads} file(s)`);
-            setShowSuccessMessage(true);
-            
-            // Hide success message after 3 seconds
-            setTimeout(() => {
-              setShowSuccessMessage(false);
-            }, 3000);
-            
-            // Clear successfully uploaded files
-            setSelectedFiles(prevFiles => prevFiles.filter(file => file.status !== 'success'));
-            
-            // Refresh files list
-            refreshFiles();
-            
-            if (onUploadComplete) {
-              onUploadComplete();
-            }
-          }
-        }
       }
     }
+    
+    // Show success message
+    if (successCount > 0) {
+      const message = successCount === 1 
+        ? 'File uploaded successfully' 
+        : `${successCount} files uploaded successfully`;
+      
+      setSuccessMessage(message);
+      setShowSuccessMessage(true);
+      
+      // Hide success message after 5 seconds
+      setTimeout(() => {
+        setShowSuccessMessage(false);
+      }, 5000);
+      
+      // Clear selected files after successful upload
+      clearSelectedFiles();
+      
+      // Call onUploadComplete callback
+      if (onUploadComplete) {
+        console.log('Calling onUploadComplete callback');
+        onUploadComplete();
+      }
+    }
+    
+    setIsUploading(false);
+    console.log('Upload process completed');
   };
 
   return (
@@ -440,14 +491,12 @@ export function FileUpload({
                 Drag and drop audio files or click to browse
               </p>
               
-              {folderId && (
-                <p className="mb-2 text-xs text-primary">
-                  Files will be uploaded to the current folder
-                </p>
-              )}
+              <p className="mb-2 text-xs text-primary">
+                {uploadContext || (folderId ? "Files will be uploaded to the current folder" : "Files will be uploaded to your library")}
+              </p>
               
               <div className="mt-2 text-xs text-muted-foreground">
-                Supported formats: {SUPPORTED_FORMATS.join(', ')} (Max: 500MB)
+                Supported formats: {SUPPORTED_FORMATS.join(', ')} (Max: {formatFileSize(MAX_FILE_SIZE)})
               </div>
               
               <input

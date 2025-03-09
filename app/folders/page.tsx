@@ -8,9 +8,8 @@ import { Plus, Folder } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileProvider } from '@/contexts/FileContext';
-import { FileContainer } from '@/app/components/files/FileContainer';
 import { FileList } from '@/app/components/files/FileList';
-import { FileDetailsPanel } from '@/app/components/files/FileDetailsPanel';
+import { useFiles } from '@/contexts/FileContext';
 
 // Mock folders data - in a real app, this would come from an API
 const mockFolders = [
@@ -22,6 +21,7 @@ const mockFolders = [
 export default function FoldersPage() {
   const router = useRouter();
   const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const { files, deleteFile } = useFiles();
   
   const handleFolderClick = (folderId: string) => {
     router.push(`/folders/${folderId}`);
@@ -74,18 +74,12 @@ export default function FoldersPage() {
           
           {/* Root Files Section */}
           <div className="mt-8">
-            <FileContainer
-              viewType="folder"
-              title="Root Files"
-              description="Files not in any folder"
-              folderId={null}
-            >
-              <FileList />
-            </FileContainer>
+            <h2 className="text-xl font-semibold mb-4">Root Files</h2>
+            <FileList
+              files={files}
+              onDeleteFile={deleteFile}
+            />
           </div>
-          
-          {/* File Details Panel */}
-          <FileDetailsPanel />
         </div>
       </FileProvider>
     </AppLayout>

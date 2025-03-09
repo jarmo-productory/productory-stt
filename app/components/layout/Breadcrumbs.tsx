@@ -19,13 +19,20 @@ interface FolderInfo {
   parent_id: string | null;
 }
 
-export function Breadcrumbs() {
+interface BreadcrumbsProps {
+  items?: Breadcrumb[];
+}
+
+export function Breadcrumbs({ items }: BreadcrumbsProps = {}) {
   const pathname = usePathname();
   const [folders, setFolders] = useState<FolderInfo[]>([]);
   const [folderHierarchy, setFolderHierarchy] = useState<Breadcrumb[]>([]);
   
   // Fetch folder information for the current path
   useEffect(() => {
+    // If custom items are provided, skip the automatic breadcrumb generation
+    if (items) return;
+    
     const fetchFolderInfo = async () => {
       const paths = pathname.split("/").filter(p => p);
       let currentFolderId: string | null = null;
@@ -72,7 +79,7 @@ export function Breadcrumbs() {
     };
     
     fetchFolderInfo();
-  }, [pathname]);
+  }, [pathname, items]);
   
   // Generate breadcrumbs based on the current path
   const generateBreadcrumbs = (): Breadcrumb[] => {
@@ -128,36 +135,34 @@ export function Breadcrumbs() {
     return breadcrumbs;
   };
   
-  const breadcrumbs = generateBreadcrumbs();
-
+  // Use either the provided items or the generated breadcrumbs
+  const breadcrumbs = items || generateBreadcrumbs();
+  
   // Don't show breadcrumbs for dashboard or account
   if (pathname === "/dashboard" || pathname === "/account") {
     return null;
   }
   
   return (
-    <nav className="flex mb-4" aria-label="Breadcrumb">
-      <ol className="flex items-center space-x-1 text-sm">
-        {breadcrumbs.map((breadcrumb, index) => (
-          <li key={breadcrumb.href} className="flex items-center">
-            {index > 0 && <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground" />}
-            
-            <Link 
-              href={breadcrumb.href}
-              className={cn(
-                "hover:text-foreground flex items-center",
-                breadcrumb.active 
-                  ? "text-foreground font-medium" 
-                  : "text-muted-foreground"
-              )}
-              aria-current={breadcrumb.active ? "page" : undefined}
-            >
-              {index === 0 && <Home className="h-3.5 w-3.5 mr-1" />}
-              {breadcrumb.label}
-            </Link>
-          </li>
-        ))}
-      </ol>
+    <nav className="flex items-center space-x-1 text-sm text-muted-foreground mb-4">
+      {breadcrumbs.map((crumb, index) => (
+        <React.Fragment key={crumb.href}>
+          {index > 0 && <ChevronRight className="h-4 w-4 mx-1" />}
+          <Link
+            href={crumb.href}
+            className={cn(
+              "hover:text-foreground transition-colors",
+              crumb.active && "text-foreground font-medium"
+            )}
+          >
+            {index === 0 && !items ? (
+              <Home className="h-4 w-4" />
+            ) : (
+              crumb.label
+            )}
+          </Link>
+        </React.Fragment>
+      ))}
     </nav>
   );
 } 

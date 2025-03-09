@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { 
@@ -149,6 +149,7 @@ export function SidebarNav() {
   const [folderToDelete, setFolderToDelete] = useState<any | null>(null);
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const prevPathRef = useRef<string | null>(null);
   
   // Function to refresh folders
   const refreshFolders = async () => {
@@ -187,28 +188,64 @@ export function SidebarNav() {
     refreshFolders();
   }, [user]);
 
+  // Remove the problematic useEffect that was causing the loop
+  // Instead, use a more targeted approach that only refreshes when needed
+  useEffect(() => {
+    // Only refresh when navigating to a different folder page
+    // This prevents the infinite loop while still updating when needed
+    if (pathname.includes('/folders/') && pathname !== prevPathRef.current) {
+      // Extract the folder ID from the pathname
+      const pathSegments = pathname.split('/');
+      const folderIndex = pathSegments.indexOf('folders');
+      
+      if (folderIndex !== -1 && folderIndex + 1 < pathSegments.length) {
+        const currentFolderId = pathSegments[folderIndex + 1];
+        
+        // Check if this folder already exists in our list
+        const folderExists = folders.some(folder => folder.id === currentFolderId);
+        
+        // Only refresh if the folder doesn't exist in our current list
+        // This prevents unnecessary refreshes when navigating to known folders
+        if (!folderExists) {
+          refreshFolders();
+        }
+      }
+    }
+    
+    // Update the previous path reference
+    prevPathRef.current = pathname;
+  }, [pathname, folders, refreshFolders]);
+
   // Auto-expand parent folders when a subfolder is active
   useEffect(() => {
     if (pathname.includes('/folders/') && folders.length > 0) {
       const folderId = pathname.split('/').pop();
       
-      // Find the current folder
-      const currentFolder = folders.find(f => f.id === folderId);
-      
-      if (currentFolder && currentFolder.parent_id) {
-        // Ensure parent folder is expanded
+      if (folderId) {
+        // Ensure the current folder is expanded to show its subfolders
         setExpandedFolders(prev => ({
           ...prev,
-          [currentFolder.parent_id]: true
+          [folderId]: true
         }));
         
-        // Check if there's a grandparent folder that needs to be expanded
-        const parentFolder = folders.find(f => f.id === currentFolder.parent_id);
-        if (parentFolder && parentFolder.parent_id) {
+        // Find the current folder
+        const currentFolder = folders.find(f => f.id === folderId);
+        
+        if (currentFolder && currentFolder.parent_id) {
+          // Ensure parent folder is expanded
           setExpandedFolders(prev => ({
             ...prev,
-            [parentFolder.parent_id]: true
+            [currentFolder.parent_id]: true
           }));
+          
+          // Check if there's a grandparent folder that needs to be expanded
+          const parentFolder = folders.find(f => f.id === currentFolder.parent_id);
+          if (parentFolder && parentFolder.parent_id) {
+            setExpandedFolders(prev => ({
+              ...prev,
+              [parentFolder.parent_id]: true
+            }));
+          }
         }
       }
     }
@@ -250,6 +287,13 @@ export function SidebarNav() {
         // Calculate left padding based on level: 8px per level
         const leftPadding = level * 8;
         
+        // Check if this is the active folder or a parent of the active folder
+        const currentFolderId = pathname.includes('/folders/') ? pathname.split('/').pop() : null;
+        const isActiveFolder = folder.id === currentFolderId;
+        
+        // Always show children of active folder
+        const shouldShowChildren = (isExpanded || isActiveFolder) && hasChildren;
+        
         return (
           <React.Fragment key={folder.id}>
             <div className="w-full">
@@ -266,6 +310,7 @@ export function SidebarNav() {
                     name={folder.name}
                     active={isActive}
                     onClick={() => {
+                      // Only toggle expansion, navigation is handled by the Link
                       if (hasChildren) {
                         toggleFolder(folder.id);
                       }
@@ -283,8 +328,8 @@ export function SidebarNav() {
               </div>
             </div>
             
-            {/* Render children at the same level, not nested */}
-            {isExpanded && hasChildren && (
+            {/* Render children if folder is expanded or is the active folder */}
+            {shouldShowChildren && (
               renderFolders(folderList, folder.id, level + 1)
             )}
           </React.Fragment>
@@ -366,6 +411,7 @@ export function SidebarNav() {
                                   name={folder.name}
                                   active={isActive}
                                   onClick={() => {
+                                    // Only toggle expansion, navigation is handled by the Link
                                     if (hasChildren) {
                                       toggleFolder(folder.id);
                                     }

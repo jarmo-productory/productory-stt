@@ -8,7 +8,8 @@ import {
   AlertCircle,
   RefreshCw,
   Trash2,
-  X
+  X,
+  FolderPlus
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useState } from 'react';
@@ -19,15 +20,20 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useRouter } from 'next/navigation';
 
 interface RecentFilesProps {
   className?: string;
   maxFiles?: number;
+  showEmptyState?: boolean;
+  showRefreshButton?: boolean;
 }
 
 export function RecentFiles({
   className = '',
-  maxFiles = 5
+  maxFiles = 5,
+  showEmptyState = false,
+  showRefreshButton = true
 }: RecentFilesProps) {
   const { 
     files, 
@@ -35,12 +41,12 @@ export function RecentFiles({
     error, 
     refreshFiles,
     deleteFile,
-    selectFile
   } = useFiles();
   
   const [fileToDelete, setFileToDelete] = useState<FileObject | null>(null);
+  const router = useRouter();
   
-  // Get the most recent files
+  // Get the most recent files, limited by maxFiles
   const recentFiles = [...files]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, maxFiles);
@@ -52,9 +58,11 @@ export function RecentFiles({
   
   // Handle file selection
   const handleFileClick = (file: FileObject) => {
-    // Don't select file if we're in delete confirmation mode
+    // Don't navigate if we're in delete confirmation mode
     if (fileToDelete) return;
-    selectFile(file);
+    
+    // Navigate to the file details page
+    router.push(`/files/${file.id}`);
   };
   
   // Handle delete confirmation
@@ -78,188 +86,125 @@ export function RecentFiles({
     setFileToDelete(null);
   };
   
-  // Render loading state
+  // If loading, show loading state
   if (isLoading) {
     return (
-      <Card className={`w-full ${className}`}>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle>Recent Files</CardTitle>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleRefresh}
-            title="Refresh"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center justify-center py-6">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
-          <p className="text-muted-foreground">Loading files...</p>
-        </CardContent>
-      </Card>
+      <div className={`flex flex-col items-center justify-center py-8 ${className}`}>
+        <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+        <p className="text-muted-foreground">Loading your files...</p>
+      </div>
     );
   }
   
-  // Render error state
+  // If error, show error state
   if (error) {
     return (
-      <Card className={`w-full ${className}`}>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle>Recent Files</CardTitle>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleRefresh}
-            title="Refresh"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center justify-center py-6">
-          <AlertCircle className="h-8 w-8 text-destructive mb-2" />
-          <p className="text-destructive font-medium">Error loading files</p>
-          <p className="text-muted-foreground text-sm mt-1">{error}</p>
-        </CardContent>
-      </Card>
+      <div className={`flex flex-col items-center justify-center py-8 ${className}`}>
+        <AlertCircle className="h-8 w-8 text-destructive mb-2" />
+        <p className="text-destructive">{error}</p>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="mt-4"
+          onClick={handleRefresh}
+        >
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Try Again
+        </Button>
+      </div>
     );
   }
   
-  // Render empty state
+  // If no files, show a simple message (parent component will handle showing/hiding the entire section)
   if (recentFiles.length === 0) {
     return (
-      <Card className={`w-full ${className}`}>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle>Recent Files</CardTitle>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleRefresh}
-            title="Refresh"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center justify-center py-8">
-          <FileAudio className="h-12 w-12 text-muted-foreground mb-4" />
-          <p className="text-lg font-medium mb-1">No files yet</p>
-          <p className="text-muted-foreground text-sm text-center">
-            Upload your first audio file to get started with transcription
-          </p>
-        </CardContent>
-      </Card>
+      <div className={`text-center py-4 ${className}`}>
+        <p className="text-muted-foreground">No files found.</p>
+      </div>
     );
   }
   
   // Render file list
   return (
-    <Card className={`w-full ${className}`}>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle>Recent Files</CardTitle>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleRefresh}
-          title="Refresh"
-        >
-          <RefreshCw className="h-4 w-4" />
-        </Button>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-1">
-          {recentFiles.map((file) => (
-            <div
-              key={file.id}
-              className={`flex items-center justify-between p-2 rounded-md hover:bg-muted/50 cursor-pointer transition-colors ${
-                fileToDelete?.id === file.id ? 'bg-muted' : ''
-              }`}
-              onClick={() => handleFileClick(file)}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <FileAudio className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                <span className="font-medium truncate">{file.name}</span>
+    <div className={className}>
+      <div className="flex items-center justify-between mb-4">
+        {/* Only show "Recent Files" title if maxFiles is small */}
+        {maxFiles <= 10 ? (
+          <h2 className="text-lg font-medium">Recent Files</h2>
+        ) : null}
+        
+        {/* Only show refresh button if showRefreshButton is true */}
+        {showRefreshButton && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleRefresh}
+            className="ml-auto"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        )}
+      </div>
+      
+      <div className="space-y-2">
+        {recentFiles.map((file) => (
+          <div
+            key={file.id}
+            className={`p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors cursor-pointer ${
+              fileToDelete && fileToDelete.id === file.id ? 'bg-destructive/10 border-destructive/30' : ''
+            }`}
+            onClick={() => handleFileClick(file)}
+          >
+            {fileToDelete && fileToDelete.id === file.id ? (
+              // Delete confirmation UI
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <AlertCircle className="h-5 w-5 text-destructive mr-2" />
+                  <span>Delete "{file.name}"?</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button 
+                    variant="destructive" 
+                    size="sm" 
+                    onClick={handleDeleteConfirm}
+                  >
+                    Delete
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleDeleteCancel}
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </div>
-              
-              <div className="flex items-center gap-3 flex-shrink-0">
-                {/* Delete confirmation UI */}
-                {fileToDelete?.id === file.id ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-destructive font-medium">Delete?</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive"
-                      onClick={handleDeleteConfirm}
-                      title="Confirm delete"
-                    >
-                      <CheckCircle2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={handleDeleteCancel}
-                      title="Cancel"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <span className="text-sm text-muted-foreground">
+            ) : (
+              // Normal file display
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <FileAudio className="h-5 w-5 text-muted-foreground mr-3" />
+                  <div>
+                    <div className="font-medium text-sm">{file.name}</div>
+                    <div className="text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(file.created_at), { addSuffix: true })}
-                    </span>
-                    
-                    {/* Status indicator */}
-                    <div className="flex items-center">
-                      {file.status === 'ready' && (
-                        <div className="flex items-center" title="Ready">
-                          <CheckCircle2 className="h-5 w-5 text-green-500" />
-                        </div>
-                      )}
-                      
-                      {file.status === 'processing' && (
-                        <div className="flex items-center" title="Processing">
-                          <Loader2 className="h-5 w-5 text-amber-500 animate-spin" />
-                        </div>
-                      )}
-                      
-                      {file.status === 'error' && (
-                        <div className="flex items-center" title="Error">
-                          <AlertCircle className="h-5 w-5 text-destructive" />
-                        </div>
-                      )}
-                      
-                      {file.status === 'transcribed' && (
-                        <div className="flex items-center" title="Transcribed">
-                          <CheckCircle2 className="h-5 w-5 text-blue-500" />
-                        </div>
-                      )}
-                      
-                      {!file.status && (
-                        <div className="flex items-center" title="Unknown">
-                          <div className="h-5 w-5 rounded-full bg-muted-foreground/30" />
-                        </div>
-                      )}
                     </div>
-                    
-                    {/* Delete button */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={(e) => handleDeleteClick(e, file)}
-                      title="Delete file"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </>
-                )}
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={(e) => handleDeleteClick(e, file)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 } 

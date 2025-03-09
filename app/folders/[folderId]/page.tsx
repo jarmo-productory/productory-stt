@@ -4,9 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, Upload, FolderPlus } from "lucide-react";
 import Link from "next/link";
 import { FileProvider } from '@/contexts/FileContext';
-import { FileContainer } from '@/app/components/files/FileContainer';
 import { FileList } from '@/app/components/files/FileList';
-import { FileDetailsPanel } from '@/app/components/files/FileDetailsPanel';
 import { FileUpload } from '@/app/components/files/FileUpload';
 import { FolderModal } from '@/app/components/folders/FolderModal';
 import { useState } from "react";
@@ -19,6 +17,10 @@ export default async function FolderDetailPage({ params }: { params: { folderId:
   const unwrappedParams = await Promise.resolve(params);
   const folderId = unwrappedParams.folderId;
   
-  // Pass the folderId to the client component
-  return <ClientFolderPage folderId={folderId} />;
+  // Pass the folderId to the client component wrapped in FileProvider
+  return (
+    <FileProvider>
+      <ClientFolderPage folderId={folderId} />
+    </FileProvider>
+  );
 }

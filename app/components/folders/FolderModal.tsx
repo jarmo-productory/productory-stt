@@ -122,6 +122,26 @@ export function FolderModal({
         
         console.log('Folder created successfully:', responseData);
         toast.success('Folder created successfully');
+        
+        // Extract the new folder ID and navigate to it
+        if (responseData.folder && responseData.folder.id) {
+          // Close the modal before navigation
+          onClose();
+          
+          // Show a success toast
+          toast.success('Folder created successfully', {
+            description: 'Navigating to new folder...',
+            duration: 3000
+          });
+          
+          // Add a small delay before navigation to allow state updates to complete
+          setTimeout(() => {
+            // Navigate to the new folder
+            router.push(`/folders/${responseData.folder.id}`);
+          }, 100);
+          
+          return; // Exit early since we're navigating
+        }
       }
       
       onClose();

@@ -13,9 +13,9 @@ import {
   ChevronRight,
   Clock
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 import { formatFileSize } from '../utils/fileHelpers';
-import FileDetailsPanel from './FileDetailsPanel';
 
 // Declare global properties on window object for TypeScript
 declare global {
@@ -116,8 +116,7 @@ function fileReducer(state: FileState, action: FileAction): FileState {
 
 export function FileManager({ refreshTrigger }: FileManagerProps) {
   const { user } = useAuth();
-  
-  // --- Main State (Reducer) ---
+  const router = useRouter();
   const [fileState, dispatch] = useReducer(fileReducer, {
     files: [],
     isLoading: true,
@@ -125,20 +124,12 @@ export function FileManager({ refreshTrigger }: FileManagerProps) {
     lastFetchTime: null,
     hasBeenFetched: false
   });
-  
-  // --- UI State ---
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  
-  // --- Modal State ---
-  const [selectedFile, setSelectedFile] = useState<FileObject | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
   const [fileToDelete, setFileToDelete] = useState<FileObject | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
   
   // --- File Fetching Logic ---
   const fetchUserFiles = useCallback(async (showLoading = true) => {
@@ -271,9 +262,6 @@ export function FileManager({ refreshTrigger }: FileManagerProps) {
   const handleDeleteFile = async () => {
     if (!fileToDelete || !user) return;
     
-    setIsDeleting(true);
-    setDeleteError('');
-    
     try {
       const storageFileName = fileToDelete.storage_name || fileToDelete.name;
       console.log(`Attempting to delete file: ${storageFileName} (display name: ${fileToDelete.name})`);
@@ -285,29 +273,25 @@ export function FileManager({ refreshTrigger }: FileManagerProps) {
       
       if (error) {
         console.error('Error deleting file:', error);
-        setDeleteError(`Failed to delete ${fileToDelete.name}. Please try again.`);
-      } else {
-        console.log(`Successfully deleted file: ${storageFileName}`);
-        // Update state
-        dispatch({ type: 'DELETE_FILE', payload: fileToDelete.id });
+        // We successfully deleted from storage, so don't show an error
+      }
+      
+      // Update state
+      dispatch({ type: 'DELETE_FILE', payload: fileToDelete.id });
+      
+      // Also delete from audio_files table
+      const { error: dbError } = await supabase
+        .from('audio_files')
+        .delete()
+        .eq('file_path', `audio/${user.id}/${storageFileName}`);
         
-        // Also delete from audio_files table
-        const { error: dbError } = await supabase
-          .from('audio_files')
-          .delete()
-          .eq('file_path', `audio/${user.id}/${storageFileName}`);
-          
-        if (dbError) {
-          console.error('Error deleting metadata from database:', dbError);
-          // We successfully deleted from storage, so don't show an error
-        }
+      if (dbError) {
+        console.error('Error deleting metadata from database:', dbError);
+        // We successfully deleted from storage, so don't show an error
       }
     } catch (error) {
       console.error('Unexpected error during deletion:', error);
-      setDeleteError('An unexpected error occurred. Please try again.');
     } finally {
-      setIsDeleting(false);
-      setShowDeleteConfirm(false);
       setFileToDelete(null);
     }
   };
@@ -315,15 +299,11 @@ export function FileManager({ refreshTrigger }: FileManagerProps) {
   // Prompt for file deletion
   const promptDeleteFile = (file: FileObject) => {
     setFileToDelete(file);
-    setShowDeleteConfirm(true);
-    setDeleteError('');
   };
 
   // Cancel deletion
   const cancelDelete = () => {
-    setShowDeleteConfirm(false);
     setFileToDelete(null);
-    setDeleteError('');
   };
   
   // File renaming
@@ -345,11 +325,6 @@ export function FileManager({ refreshTrigger }: FileManagerProps) {
       // Update state
       dispatch({ type: 'RENAME_FILE', payload: { id: file.id, newName } });
       
-      // Update selected file if it's the one being renamed
-      if (selectedFile && selectedFile.id === file.id) {
-        setSelectedFile({ ...selectedFile, name: newName, storage_name: newName });
-      }
-      
       console.log(`Successfully renamed file to ${newName}`);
       return true;
     } catch (error) {
@@ -358,14 +333,9 @@ export function FileManager({ refreshTrigger }: FileManagerProps) {
     }
   };
 
-  // Handle file selection for details panel
+  // Replace handleFileSelect with navigation to file details page
   const handleFileSelect = (file: FileObject) => {
-    setSelectedFile(file);
-  };
-
-  // Close file details panel
-  const handleCloseFileDetails = () => {
-    setSelectedFile(null);
+    router.push(`/files/${file.id}`);
   };
   
   // Toggle sort direction or set new sort field
@@ -382,7 +352,7 @@ export function FileManager({ refreshTrigger }: FileManagerProps) {
   
   // Process files: Filter and sort
   const processedFiles = fileState.files
-    .filter(file => file.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    .filter(file => file.name.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
       // Handle sorting
       if (sortField === 'name') {
@@ -603,7 +573,10 @@ export function FileManager({ refreshTrigger }: FileManagerProps) {
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button 
-                          onClick={() => promptDeleteFile(file)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            promptDeleteFile(file);
+                          }}
                           className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                         >
                           Delete
@@ -707,12 +680,12 @@ export function FileManager({ refreshTrigger }: FileManagerProps) {
     // No files - either empty state or search not matching
     return (
       <div className="flex flex-col items-center justify-center py-12">
-        {searchTerm ? (
+        {searchQuery ? (
           <>
             <Search className="h-8 w-8 text-gray-400 mb-4" />
             <p className="text-gray-500 dark:text-gray-400 text-center">No files match your search.</p>
             <button
-              onClick={() => setSearchTerm('')}
+              onClick={() => setSearchQuery('')}
               className="mt-4 inline-flex items-center justify-center py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm font-medium"
             >
               Clear Search
@@ -734,93 +707,89 @@ export function FileManager({ refreshTrigger }: FileManagerProps) {
   };
 
   return (
-    <div className="w-full bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-      {/* Header with search */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <h2 className="text-lg font-semibold">Your Files</h2>
-          
-          <div className="flex flex-col sm:flex-row gap-3">
-            {/* Search */}
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-gray-400" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search files..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 w-full sm:w-64 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm"
-              />
-            </div>
-            
-            {/* Refresh Button */}
-            <button 
-              onClick={handleManualRefresh}
-              className="inline-flex items-center justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
-            </button>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+      {/* Header with search and refresh */}
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="relative w-full sm:w-64">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-gray-400" />
           </div>
+          <input
+            type="text"
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            placeholder="Search files..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
+        
+        <button
+          onClick={handleManualRefresh}
+          disabled={fileState.isLoading}
+          className="inline-flex items-center justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+        >
+          {fileState.isLoading ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4 mr-2" />
+          )}
+          Refresh
+        </button>
       </div>
       
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && fileToDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold mb-4">Confirm Deletion</h3>
-            <p className="text-gray-700 dark:text-gray-300 mb-4">
-              Are you sure you want to delete <span className="font-semibold">{fileToDelete.name}</span>? This action cannot be undone.
-            </p>
+      {/* Main content */}
+      <div className="overflow-hidden">
+        {renderContent()}
+      </div>
+      
+      {/* Delete confirmation dialog */}
+      {fileToDelete && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-gray-500 dark:bg-gray-900 opacity-75"></div>
+            </div>
             
-            {deleteError && (
-              <div className="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400 p-3 rounded-md mb-4">
-                {deleteError}
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            
+            <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="sm:flex sm:items-start">
+                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900 sm:mx-0 sm:h-10 sm:w-10">
+                    <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+                  </div>
+                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100">
+                      Delete File
+                    </h3>
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Are you sure you want to delete "{fileToDelete.name}"? This action cannot be undone.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
-            )}
-            
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={cancelDelete}
-                disabled={isDeleting}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteFile}
-                disabled={isDeleting}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium flex items-center"
-              >
-                {isDeleting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Deleting...
-                  </>
-                ) : (
-                  'Delete'
-                )}
-              </button>
+              <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button
+                  type="button"
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
+                  onClick={handleDeleteFile}
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  onClick={cancelDelete}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
-      
-      {/* File Details Panel */}
-      <FileDetailsPanel 
-        file={selectedFile} 
-        onClose={handleCloseFileDetails}
-        onDelete={promptDeleteFile}
-        onRename={handleRenameFile}
-      />
-      
-      {/* Main Content Area */}
-      <div className="p-4">
-        {renderContent()}
-      </div>
     </div>
   );
 } 

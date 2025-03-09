@@ -25,6 +25,7 @@ import {
   extractAudioDuration,
   saveAudioMetadata
 } from '../utils/fileHelpers';
+import { storagePathUtil } from '@/lib/utils/storage';
 
 interface FileUploadProps {
   onUploadComplete: () => void;
@@ -309,7 +310,7 @@ export function FileUpload({ onUploadComplete, onUploadStart }: FileUploadProps)
           
           // Generate formatted filename with original name, timestamp, and random string
           const formattedFilename = generateFormattedFilename(file.name);
-          const filePath = `audio/${userId}/${formattedFilename}`;
+          const filePath = storagePathUtil.getAudioPath(userId, formattedFilename);
           console.log(`File path in storage: ${filePath}`);
           
           // Extract audio duration before upload
@@ -373,7 +374,7 @@ export function FileUpload({ onUploadComplete, onUploadStart }: FileUploadProps)
           trackProgress(1);
           
           // Upload to Supabase with progress tracking
-          const uploadUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/audio-files/${filePath}`;
+          const uploadUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/${storagePathUtil.getBucketConfig().defaultBucket}/${filePath}`;
           
           // Create form data with the file
           const formData = new FormData();

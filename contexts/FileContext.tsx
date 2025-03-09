@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useSupabase } from '@/hooks/useSupabase';
 import { useAuth } from './AuthContext';
 
@@ -21,6 +21,10 @@ export interface FileObject {
   file_name?: string;
   file_path?: string;
   format?: string;
+  // Epic-6 storage fields
+  bucket_name?: string;
+  storage_prefix?: string;
+  normalized_path?: string; // Full normalized storage path
 }
 
 // Define sort types
@@ -31,7 +35,6 @@ export type SortDirection = 'asc' | 'desc';
 interface FileContextType {
   // File state
   files: FileObject[];
-  selectedFile: FileObject | null;
   isLoading: boolean;
   error: string | null;
   sortField: SortField;
@@ -41,7 +44,6 @@ interface FileContextType {
   
   // File operations
   fetchFiles: (folderId?: string | null) => Promise<void>;
-  selectFile: (file: FileObject | null) => void;
   deleteFile: (file: FileObject) => Promise<boolean>;
   renameFile: (file: FileObject, newName: string) => Promise<boolean>;
   setSortField: (field: SortField) => void;
@@ -61,7 +63,6 @@ export function FileProvider({ children }: { children: ReactNode }) {
   
   // State
   const [files, setFiles] = useState<FileObject[]>([]);
-  const [selectedFile, setSelectedFile] = useState<FileObject | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>('created_at');
@@ -69,9 +70,20 @@ export function FileProvider({ children }: { children: ReactNode }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [retryAttempts, setRetryAttempts] = useState(0);
+  const [retryTimeout, setRetryTimeout] = useState<NodeJS.Timeout | null>(null);
 
-  // Fetch files from Supabase
-  const fetchFiles = async (folderId: string | null = currentFolderId) => {
+  // Clear retry timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
+    };
+  }, [retryTimeout]);
+
+  // Fetch files from Supabase with retry logic
+  const fetchFiles = useCallback(async (folderId: string | null = currentFolderId) => {
     if (!user) return;
     
     setIsLoading(true);
@@ -87,23 +99,35 @@ export function FileProvider({ children }: { children: ReactNode }) {
         .select('*')
         .eq('user_id', user.id);
       
-      // Note: The audio_files table doesn't have a folder_id column
-      // We're keeping this code commented for future implementation
-      // if (folderId) {
-      //   query = query.eq('folder_id', folderId);
-      // } else {
-      //   query = query.is('folder_id', null);
-      // }
+      // Filter by folder if specified
+      if (folderId) {
+        query = query.eq('folder_id', folderId);
+      }
       
-      // Execute query
-      const { data, error } = await query;
+      // Execute query with timeout
+      const fetchPromise = query;
+      const timeoutPromise = new Promise((_, reject) => {
+        const id = setTimeout(() => {
+          clearTimeout(id);
+          reject(new Error('Request timed out. Please try again.'));
+        }, 10000); // 10 second timeout
+      });
+      
+      // Race between fetch and timeout
+      const { data, error } = await Promise.race([
+        fetchPromise,
+        timeoutPromise.then(() => ({ data: null, error: new Error('Request timed out') }))
+      ]) as any;
       
       if (error) {
         throw error;
       }
       
+      // Reset retry attempts on success
+      setRetryAttempts(0);
+      
       // Map the database fields to our FileObject interface
-      const mappedFiles = data?.map(file => ({
+      const mappedFiles = data?.map((file: any) => ({
         id: file.id,
         name: file.file_name || 'Unnamed File', // Use file_name as name
         storage_name: file.file_path, // Use file_path as storage_name
@@ -112,27 +136,43 @@ export function FileProvider({ children }: { children: ReactNode }) {
         duration: file.duration,
         status: file.status,
         metadata: file.metadata,
-        folder_id: null, // No folder support yet
+        folder_id: file.folder_id || null,
         file_name: file.file_name,
         file_path: file.file_path,
-        format: file.format
+        format: file.format,
+        // Include Epic-6 storage fields
+        bucket_name: file.bucket_name,
+        storage_prefix: file.storage_prefix,
+        normalized_path: file.normalized_path
       })) || [];
       
       // Update files state
       setFiles(mappedFiles);
     } catch (err: any) {
       console.error('Error fetching files:', err);
-      setError(err.message || 'Failed to fetch files');
-      setFiles([]);
+      
+      // Set error message
+      setError(err.message || 'Failed to fetch files. Please try again.');
+      
+      // Implement exponential backoff for retries
+      if (retryAttempts < 3) { // Max 3 retry attempts
+        const delay = Math.pow(2, retryAttempts) * 1000; // Exponential backoff: 1s, 2s, 4s
+        console.log(`Retrying in ${delay}ms (attempt ${retryAttempts + 1}/3)...`);
+        
+        const timeout = setTimeout(() => {
+          setRetryAttempts(prev => prev + 1);
+          fetchFiles(folderId);
+        }, delay);
+        
+        setRetryTimeout(timeout);
+      } else {
+        // Reset retry attempts after max attempts reached
+        setRetryAttempts(0);
+      }
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Select a file
-  const selectFile = (file: FileObject | null) => {
-    setSelectedFile(file);
-  };
+  }, [currentFolderId, supabase, user, retryAttempts]);
 
   // Delete a file
   const deleteFile = async (file: FileObject): Promise<boolean> => {
@@ -166,11 +206,6 @@ export function FileProvider({ children }: { children: ReactNode }) {
       // Update local state
       setFiles(files.filter(f => f.id !== file.id));
       
-      // Clear selection if the deleted file was selected
-      if (selectedFile && selectedFile.id === file.id) {
-        setSelectedFile(null);
-      }
-      
       return true;
     } catch (err: any) {
       console.error('Error deleting file:', err);
@@ -199,11 +234,6 @@ export function FileProvider({ children }: { children: ReactNode }) {
       // Update local state
       setFiles(files.map(f => f.id === file.id ? { ...f, name: newName, file_name: newName } : f));
       
-      // Update selected file if it was renamed
-      if (selectedFile && selectedFile.id === file.id) {
-        setSelectedFile({ ...selectedFile, name: newName, file_name: newName });
-      }
-      
       return true;
     } catch (err: any) {
       console.error('Error renaming file:', err);
@@ -213,21 +243,21 @@ export function FileProvider({ children }: { children: ReactNode }) {
   };
 
   // Refresh files
-  const refreshFiles = () => {
+  const refreshFiles = useCallback(() => {
+    setRetryAttempts(0); // Reset retry attempts
     setRefreshTrigger(prev => prev + 1);
-  };
+  }, []);
 
   // Fetch files when user, folder, or refresh trigger changes
   useEffect(() => {
     if (user) {
       fetchFiles();
     }
-  }, [user, refreshTrigger]);
+  }, [user, refreshTrigger, fetchFiles]);
 
   // Context value
   const value: FileContextType = {
     files,
-    selectedFile,
     isLoading,
     error,
     sortField,
@@ -235,7 +265,6 @@ export function FileProvider({ children }: { children: ReactNode }) {
     searchQuery,
     currentFolderId,
     fetchFiles,
-    selectFile,
     deleteFile,
     renameFile,
     setSortField,
