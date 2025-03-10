@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
-import { Play, Pause, Volume2, VolumeX, AlertCircle, Download } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, AlertCircle, Download, FileAudio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { formatDuration } from '@/lib/utils';
@@ -15,6 +15,7 @@ export interface AudioPlayerProps {
   onEnded?: () => void;
   initialVolume?: number;
   initialMuted?: boolean;
+  lazyLoad?: boolean;
 }
 
 export interface AudioPlayerHandle {
@@ -28,8 +29,11 @@ export interface AudioPlayerHandle {
 const isFormatSupported = (url: string): boolean => {
   const audio = document.createElement('audio');
   
-  // Extract file extension from URL
-  const extension = url.split('.').pop()?.toLowerCase();
+  // Extract file extension from URL, ignoring query parameters
+  const urlWithoutParams = url.split('?')[0];
+  const extension = urlWithoutParams.split('.').pop()?.toLowerCase();
+  
+  console.log('Extracted file extension:', extension);
   
   // Map extension to MIME type
   let mimeType = '';
@@ -50,10 +54,13 @@ const isFormatSupported = (url: string): boolean => {
       mimeType = 'audio/flac';
       break;
     default:
+      console.warn('Unsupported file extension:', extension);
       return false;
   }
   
-  return audio.canPlayType(mimeType) !== '';
+  const isSupported = audio.canPlayType(mimeType) !== '';
+  console.log(`MIME type ${mimeType} supported: ${isSupported}`);
+  return isSupported;
 };
 
 export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
@@ -66,6 +73,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     onEnded,
     initialVolume = 0.7,
     initialMuted = false,
+    lazyLoad = false,
   }, ref) => {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -74,8 +82,9 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     const [volume, setVolume] = useState(initialVolume);
     const [isMuted, setIsMuted] = useState(initialMuted);
     const [error, setError] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(!lazyLoad);
     const [formatSupported, setFormatSupported] = useState(true);
+    const [isAudioInitialized, setIsAudioInitialized] = useState(!lazyLoad);
 
     // Check if format is supported
     useEffect(() => {
@@ -124,6 +133,11 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
 
     // Initialize audio player
     useEffect(() => {
+      if (lazyLoad && !isAudioInitialized) {
+        setIsLoading(false);
+        return;
+      }
+      
       if (!audioUrl) {
         setError('No audio URL provided');
         setIsLoading(false);
@@ -222,7 +236,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
         // Clear the source last
         audio.src = '';
       };
-    }, [audioUrl, onTimeUpdate, onEnded, formatSupported]);
+    }, [audioUrl, onTimeUpdate, onEnded, formatSupported, lazyLoad, isAudioInitialized]);
 
     // Update volume when it changes
     useEffect(() => {
@@ -317,6 +331,11 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       document.body.removeChild(link);
     };
     
+    // Function to initialize audio (for lazy loading)
+    const initializeAudio = () => {
+      setIsAudioInitialized(true);
+    };
+    
     if (error) {
       return (
         <div className={`p-4 border border-red-200 rounded-md bg-red-50 ${className}`}>
@@ -361,11 +380,64 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       );
     }
     
+    // If lazy loading is enabled and audio hasn't been initialized yet, show a button to load audio
+    if (lazyLoad && !isAudioInitialized) {
+      return (
+        <div className={`rounded-md border border-input bg-background p-4 ${className}`}>
+          <div className="flex flex-col items-center justify-center gap-4">
+            <p className="text-sm text-muted-foreground">Audio preview available</p>
+            <Button 
+              onClick={initializeAudio}
+              className="flex items-center gap-2"
+            >
+              <FileAudio className="h-4 w-4" />
+              Load Audio Player
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    
+    // If format is not supported, show a message with download option
+    if (!formatSupported) {
+      return (
+        <div className={`rounded-md border border-input bg-background p-4 ${className}`}>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2 text-amber-600">
+              <AlertCircle className="h-5 w-5" />
+              <p className="text-sm">
+                This audio format is not supported by your browser. You can download the file instead.
+              </p>
+            </div>
+            <div className="flex justify-between">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={retryLoading}
+                className="flex items-center gap-2"
+              >
+                Try Again
+              </Button>
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={downloadAudio}
+                className="flex items-center gap-2"
+              >
+                <Download className="h-4 w-4" />
+                Download Audio
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
     return (
       <div className={`space-y-2 p-4 border rounded-md bg-muted/20 ${className}`}>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
+          <Button 
+            variant="outline" 
             size="icon"
             onClick={togglePlayPause}
             aria-label={isPlaying ? 'Pause' : 'Play'}
@@ -389,7 +461,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
             {formatDuration(currentTime)} / {formatDuration(duration)}
           </div>
           
-          <Button
+          <Button 
             variant="ghost"
             size="icon"
             onClick={toggleMute}
@@ -426,4 +498,4 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
 );
 
 // Add display name to the component
-AudioPlayer.displayName = 'AudioPlayer'; 
+AudioPlayer.displayName = 'AudioPlayer';

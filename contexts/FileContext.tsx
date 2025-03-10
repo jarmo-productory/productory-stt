@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useSupabase } from '@/hooks/useSupabase';
 import { useAuth } from './AuthContext';
+import { storagePathUtil } from '@/lib/utils/storage';
 
 // Define file object interface
 export interface FileObject {
@@ -12,7 +13,7 @@ export interface FileObject {
   size: number;
   created_at: string;
   duration?: number;    // Audio duration in seconds
-  status?: 'ready' | 'processing' | 'error' | 'transcribed'; // File processing status
+  status?: 'ready' | 'processing' | 'error' | 'transcribed' | 'deleted'; // File processing status
   metadata?: {
     [key: string]: any;
   };
@@ -97,7 +98,8 @@ export function FileProvider({ children }: { children: ReactNode }) {
       let query = supabase
         .from('audio_files')
         .select('*')
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .neq('status', 'deleted'); // Filter out deleted files
       
       // Filter by folder if specified
       if (folderId) {
@@ -179,23 +181,10 @@ export function FileProvider({ children }: { children: ReactNode }) {
     if (!user) return false;
     
     try {
-      // Delete from storage
-      if (file.storage_name || file.file_path) {
-        const storagePath = file.storage_name || file.file_path;
-        const { error: storageError } = await supabase
-          .storage
-          .from('audio-files')
-          .remove([`${user.id}/${storagePath}`]);
-        
-        if (storageError) {
-          throw storageError;
-        }
-      }
-      
-      // Delete from database
+      // Update file status to 'deleted' in the database (soft delete)
       const { error: dbError } = await supabase
         .from('audio_files')
-        .delete()
+        .update({ status: 'deleted' })
         .eq('id', file.id)
         .eq('user_id', user.id);
       
@@ -203,7 +192,7 @@ export function FileProvider({ children }: { children: ReactNode }) {
         throw dbError;
       }
       
-      // Update local state
+      // Update local state by removing the file from the list
       setFiles(files.filter(f => f.id !== file.id));
       
       return true;
@@ -219,22 +208,87 @@ export function FileProvider({ children }: { children: ReactNode }) {
     if (!user) return false;
     
     try {
-      // Update in database
-      const { data, error } = await supabase
-        .from('audio_files')
-        .update({ file_name: newName }) // Use file_name instead of name
-        .eq('id', file.id)
-        .eq('user_id', user.id)
-        .select();
-      
-      if (error) {
-        throw error;
+      // Check if we need to update the file in storage
+      if (file.file_path) {
+        // Get the file extension from the original file path
+        const fileExtension = file.file_path.split('.').pop() || '';
+        
+        // Generate a new formatted filename with the same extension
+        const newFormattedFilename = `${newName.replace(/\s+/g, '_')}.${fileExtension}`;
+        
+        // Get the original file path and construct the new path
+        const originalPath = file.file_path.startsWith('audio/') 
+          ? file.file_path 
+          : storagePathUtil.getAudioPath(user.id, file.file_path);
+          
+        const newPath = storagePathUtil.getAudioPath(user.id, newFormattedFilename);
+        
+        console.log('Renaming file in storage:', { originalPath, newPath });
+        
+        // Copy the file to the new location
+        const { data: copyData, error: copyError } = await supabase
+          .storage
+          .from('audio-files')
+          .copy(originalPath, newPath);
+          
+        if (copyError) {
+          console.error("Error copying file in storage:", copyError);
+          throw copyError;
+        }
+        
+        console.log('File copied successfully:', copyData);
+        
+        // Update only the file_name in the database
+        // The trigger will handle updating the file_path
+        const { data, error } = await supabase
+          .from('audio_files')
+          .update({ file_name: newName })
+          .eq('id', file.id)
+          .eq('user_id', user.id)
+          .select();
+        
+        if (error) {
+          throw error;
+        }
+        
+        // Delete the original file from storage (only after successful copy and DB update)
+        const { error: deleteError } = await supabase
+          .storage
+          .from('audio-files')
+          .remove([originalPath]);
+          
+        if (deleteError) {
+          console.warn("Warning: Could not delete original file from storage:", deleteError);
+          // We don't throw here as the rename operation is still successful
+        }
+        
+        // Update local state
+        setFiles(files.map(f => f.id === file.id ? { 
+          ...f, 
+          name: newName, 
+          file_name: newName
+          // file_path and normalized_path will be updated by the database trigger
+        } : f));
+        
+        return true;
+      } else {
+        // If we don't have file path info, just update the display name
+        const { data, error } = await supabase
+          .from('audio_files')
+          .update({ file_name: newName })
+          .eq('id', file.id)
+          .eq('user_id', user.id)
+          .select();
+        
+        if (error) {
+          throw error;
+        }
+        
+        // Update local state
+        setFiles(files.map(f => f.id === file.id ? { ...f, name: newName, file_name: newName } : f));
+        
+        return true;
       }
-      
-      // Update local state
-      setFiles(files.map(f => f.id === file.id ? { ...f, name: newName, file_name: newName } : f));
-      
-      return true;
     } catch (err: any) {
       console.error('Error renaming file:', err);
       setError(err.message || 'Failed to rename file');

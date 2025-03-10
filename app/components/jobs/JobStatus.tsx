@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, CheckCircle, AlertCircle, Clock, RefreshCw } from 'lucide-react';
+import { Loader2, CheckCircle, AlertCircle, Clock, RefreshCw, FileAudio, Download, Mic, Users, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -149,6 +149,93 @@ export function JobStatus({
     }
   };
 
+  // Add function to estimate job progress percentage
+  const getProgressPercentage = (job: Job, logs: any[]): number => {
+    if (job.status === 'completed') return 100;
+    if (job.status === 'failed') return 100;
+    if (job.status === 'pending') return 0;
+    
+    // If processing, estimate based on logs
+    const logMessages = logs.map(log => log.message?.toLowerCase() || '');
+    
+    if (logMessages.some(msg => msg.includes('finaliz'))) return 90;
+    if (logMessages.some(msg => msg.includes('speaker') || msg.includes('diariz'))) return 75;
+    if (logMessages.some(msg => msg.includes('processing audio') || msg.includes('transcrib'))) return 50;
+    if (logMessages.some(msg => msg.includes('download'))) return 25;
+    
+    // Default if processing but no specific logs
+    return 10;
+  };
+
+  // Enhanced function to provide more detailed status text for specific job types
+  const getDetailedStatusText = (job: Job): string => {
+    if (job.job_type === 'transcription') {
+      switch (job.status) {
+        case 'pending':
+          return 'Waiting in queue - Your transcription request has been received';
+        case 'processing':
+          // Try to provide more details based on log messages
+          const logMessages = logs.map(log => log.message?.toLowerCase() || '');
+          
+          if (logMessages.some(msg => msg.includes('finaliz'))) {
+            return 'Finalizing transcription - Almost done!';
+          }
+          if (logMessages.some(msg => msg.includes('speaker') || msg.includes('diariz'))) {
+            return 'Identifying speakers in your audio';
+          }
+          if (logMessages.some(msg => msg.includes('processing audio') || msg.includes('transcrib'))) {
+            return 'Converting speech to text';
+          }
+          if (logMessages.some(msg => msg.includes('download'))) {
+            return 'Downloading audio file for processing';
+          }
+          
+          return 'Processing your audio file';
+        case 'completed':
+          return 'Transcription completed successfully!';
+        case 'failed':
+          return 'Transcription failed - See error details below';
+        case 'retrying':
+          return 'Retrying transcription after a temporary issue';
+        default:
+          return 'Unknown status';
+      }
+    }
+    
+    // For other job types, use the basic status text
+    return getStatusText(job.status);
+  };
+
+  // New function to get current transcription step icon
+  const getCurrentStepIcon = (job: Job) => {
+    if (job.job_type !== 'transcription') return null;
+    
+    const logMessages = logs.map(log => log.message?.toLowerCase() || '');
+    
+    if (job.status === 'pending') {
+      return <Clock className="h-5 w-5 text-yellow-500" />;
+    }
+    
+    if (job.status === 'processing') {
+      if (logMessages.some(msg => msg.includes('finaliz'))) {
+        return <Save className="h-5 w-5 text-blue-500" />;
+      }
+      if (logMessages.some(msg => msg.includes('speaker') || msg.includes('diariz'))) {
+        return <Users className="h-5 w-5 text-blue-500" />;
+      }
+      if (logMessages.some(msg => msg.includes('processing audio') || msg.includes('transcrib'))) {
+        return <Mic className="h-5 w-5 text-blue-500" />;
+      }
+      if (logMessages.some(msg => msg.includes('download'))) {
+        return <Download className="h-5 w-5 text-blue-500" />;
+      }
+      
+      return <FileAudio className="h-5 w-5 text-blue-500" />;
+    }
+    
+    return getStatusIcon(job.status);
+  };
+
   if (loading && !job) {
     return (
       <div className={cn("flex items-center justify-center p-4", className)}>
@@ -202,6 +289,29 @@ export function JobStatus({
         </div>
       </CardHeader>
       <CardContent className="pb-2">
+        {/* Add detailed status description */}
+        <div className="mb-4 flex items-center p-3 border rounded-md bg-gray-50">
+          {job.job_type === 'transcription' && getCurrentStepIcon(job)}
+          <span className="ml-2 text-sm font-medium">{getDetailedStatusText(job)}</span>
+        </div>
+        
+        {/* Add progress bar for processing or pending jobs */}
+        {(job.status === 'processing' || job.status === 'pending') && (
+          <div className="mb-4">
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div 
+                className="bg-blue-600 h-2.5 rounded-full transition-all duration-500 ease-in-out"
+                style={{ width: `${getProgressPercentage(job, logs)}%` }}
+              />
+            </div>
+            <div className="flex justify-between mt-1 text-xs text-gray-500">
+              <span>0%</span>
+              <span>50%</span>
+              <span>100%</span>
+            </div>
+          </div>
+        )}
+        
         <div className="space-y-2 text-sm">
           <div className="grid grid-cols-2 gap-1">
             <span className="text-gray-500">Job ID:</span>

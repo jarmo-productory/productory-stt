@@ -5,11 +5,13 @@ import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { formatDuration } from '@/lib/utils';
 import { AudioPlayer, AudioPlayerHandle } from '@/app/components/ui/audio-player';
+import { JobStatus } from '@/app/components/jobs/JobStatus';
 
 export type TranscriptionViewProps = {
   transcriptionId: string;
   audioUrl?: string;
   className?: string;
+  jobId?: string;
 };
 
 type TranscriptionSegment = {
@@ -57,10 +59,12 @@ export function TranscriptionView({
   transcriptionId,
   audioUrl,
   className,
+  jobId,
 }: TranscriptionViewProps) {
   const [transcription, setTranscription] = useState<Transcription | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [associatedJobId, setAssociatedJobId] = useState<string | null>(jobId || null);
   
   // Audio player state
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
@@ -84,6 +88,29 @@ export function TranscriptionView({
           ...data.transcription,
           segments: data.segments || []
         });
+        
+        // If we don't have a jobId and the transcription is pending/processing,
+        // try to fetch the associated job
+        if (!associatedJobId && 
+            data.transcription && 
+            (data.transcription.status === 'pending' || data.transcription.status === 'processing')) {
+          try {
+            const jobResponse = await fetch(`/api/transcriptions/${transcriptionId}/job`);
+            if (jobResponse.ok) {
+              const jobData = await jobResponse.json();
+              if (jobData.jobId) {
+                setAssociatedJobId(jobData.jobId);
+              } else {
+                console.log('No job found for transcription, but continuing to display transcription');
+              }
+            } else {
+              console.warn('Failed to fetch job data, but continuing to display transcription');
+            }
+          } catch (jobErr) {
+            console.error('Error fetching associated job:', jobErr);
+            // Don't set an error - we can still show the transcription
+          }
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
         console.error('Error fetching transcription:', err);
@@ -93,7 +120,7 @@ export function TranscriptionView({
     }
     
     fetchTranscription();
-  }, [transcriptionId]);
+  }, [transcriptionId, associatedJobId]);
   
   // Handle time update from audio player
   const handleTimeUpdate = (currentTime: number) => {
@@ -109,7 +136,10 @@ export function TranscriptionView({
   
   // Play segment
   const playSegment = (segment: TranscriptionSegment) => {
-    if (!audioPlayerRef.current) return;
+    if (!audioPlayerRef.current) {
+      console.warn('Audio player not initialized');
+      return;
+    }
     
     const startTime = toNumber(segment.start_time);
     
@@ -119,6 +149,7 @@ export function TranscriptionView({
     // Start playing if not already playing
     audioPlayerRef.current.play().catch((err: Error) => {
       console.error('Error playing segment:', err);
+      // No need to show an error message here as the AudioPlayer component will handle it
     });
   };
   
@@ -140,16 +171,14 @@ export function TranscriptionView({
     );
   }
   
-  if (transcription.status === 'pending' || transcription.status === 'processing') {
+  if ((transcription.status === 'pending' || transcription.status === 'processing') && associatedJobId) {
     return (
-      <div className={`p-4 border border-blue-200 rounded-md bg-blue-50 ${className}`}>
-        <div className="flex items-center">
-          <Loader2 className="h-4 w-4 mr-2 animate-spin text-blue-700" />
-          <p className="text-blue-700">
-            {transcription.status === 'pending' ? 'Transcription is pending...' : 'Transcription is being processed...'}
-          </p>
-        </div>
-      </div>
+      <JobStatus 
+        jobId={associatedJobId}
+        autoRefresh={true}
+        pollingInterval={3000}
+        className={className}
+      />
     );
   }
   
@@ -196,6 +225,7 @@ export function TranscriptionView({
           audioUrl={audioUrl}
           onTimeUpdate={handleTimeUpdate}
           ref={audioPlayerRef}
+          lazyLoad={true}
         />
       )}
       

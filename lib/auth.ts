@@ -15,7 +15,8 @@ export type AuthResult = {
  */
 export async function authenticateRequest(req: NextRequest): Promise<AuthResult> {
   try {
-    const cookieStore = cookies();
+    // In Next.js 15, cookies() is an async function that should be awaited
+    const cookieStore = await cookies();
     
     // Use the official Supabase auth helper for route handlers
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore });

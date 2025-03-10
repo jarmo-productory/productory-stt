@@ -10,7 +10,8 @@ import {
   FileType, 
   Save,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Textarea } from "@/components/ui/textarea";
@@ -336,6 +337,13 @@ function StatusBadge({ status }: { status?: FileObject['status'] }) {
       return (
         <div className="flex items-center gap-1 text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-full text-xs">
           <span>Transcribed</span>
+        </div>
+      );
+    case 'deleted':
+      return (
+        <div className="flex items-center gap-1 text-gray-600 bg-gray-50 dark:bg-gray-900/20 px-2 py-1 rounded-full text-xs">
+          <Trash2 className="h-3 w-3" />
+          <span>Deleted</span>
         </div>
       );
     default:

@@ -9,7 +9,9 @@ import { ChevronLeft, Upload, FolderPlus, Pencil, Trash2, Loader2 } from "lucide
 import { useFiles, FileObject } from '@/contexts/FileContext';
 import { FileList } from '@/app/components/files/FileList';
 import { FileUpload } from '@/app/components/files/FileUpload';
+import { FileDeleteModal } from '@/app/components/files/FileDeleteModal';
 import { FolderModal } from '@/app/components/folders/FolderModal';
+import { DeleteModal } from '@/app/components/folders/DeleteModal';
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useRouter } from "next/navigation";
@@ -25,6 +27,9 @@ export default function ClientFolderPage({ folderId }: ClientFolderPageProps) {
   const [editedName, setEditedName] = useState("");
   const [showUpload, setShowUpload] = useState(false);
   const [isCreateSubfolderModalOpen, setIsCreateSubfolderModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isFileDeleteModalOpen, setIsFileDeleteModalOpen] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState<FileObject | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -58,16 +63,23 @@ export default function ClientFolderPage({ folderId }: ClientFolderPageProps) {
     }
   }, [isEditing]);
 
-  const handleDeleteFolder = async () => {
-    if (confirm("Are you sure you want to delete this folder? All files will remain in your account.")) {
-      const supabase = createClientComponentClient();
-      await supabase
-        .from('folders')
-        .update({ is_deleted: true })
-        .eq('id', folderId);
-      
-      window.location.href = "/folders";
-    }
+  const handleDeleteFolder = () => {
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDeleteSuccess = () => {
+    router.push('/folders');
+  };
+
+  const handleDeleteFile = (file: FileObject) => {
+    setFileToDelete(file);
+    setIsFileDeleteModalOpen(true);
+  };
+
+  const handleFileDeleteSuccess = () => {
+    refreshFiles();
+    setIsRefreshing(true);
+    setTimeout(() => setIsRefreshing(false), 1000);
   };
 
   const startEditing = () => {
@@ -193,7 +205,7 @@ export default function ClientFolderPage({ folderId }: ClientFolderPageProps) {
         ) : (
           <FileList
             files={files}
-            onDeleteFile={deleteFile}
+            onDeleteFile={handleDeleteFile}
             folderId={folderId}
           />
         )}
@@ -203,6 +215,22 @@ export default function ClientFolderPage({ folderId }: ClientFolderPageProps) {
           isOpen={isCreateSubfolderModalOpen}
           onClose={() => setIsCreateSubfolderModalOpen(false)}
           parentId={folderId}
+        />
+
+        {/* Delete Folder Modal */}
+        <DeleteModal
+          isOpen={isDeleteModalOpen}
+          onClose={() => setIsDeleteModalOpen(false)}
+          folder={{ id: folderId, name: folderName }}
+          onSuccess={handleDeleteSuccess}
+        />
+
+        {/* Delete File Modal */}
+        <FileDeleteModal
+          isOpen={isFileDeleteModalOpen}
+          onOpenChange={setIsFileDeleteModalOpen}
+          file={fileToDelete}
+          onSuccess={handleFileDeleteSuccess}
         />
       </div>
     </AppLayout>

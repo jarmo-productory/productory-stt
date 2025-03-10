@@ -18,13 +18,6 @@ import {
   FileAudio
 } from "lucide-react";
 import Link from "next/link";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,6 +31,8 @@ import {
 import { OverviewColumn } from './components/OverviewColumn';
 import { TranscriptionColumn } from './components/TranscriptionColumn';
 import { FileObject } from "@/contexts/FileContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { FileService } from "@/app/components/files";
 
 interface ClientFileDetailsPageProps {
   fileId: string;
@@ -52,75 +47,53 @@ export default function ClientFileDetailsPage({ fileId }: ClientFileDetailsPageP
   const [folderId, setFolderId] = useState<string | null>(null);
   const [fileData, setFileData] = useState<FileObject | null>(null);
   const router = useRouter();
+  const { user } = useAuth();
   
   // Fetch the file details
   useEffect(() => {
-    const fetchFileDetails = async () => {
-      const supabase = createClientComponentClient();
-      const { data, error } = await supabase
-        .from('audio_files')
-        .select('*')
-        .eq('id', fileId)
-        .single();
+    const loadFileDetails = async () => {
+      const { fileData, folderName, folderId } = await FileService.fetchFileDetails(fileId);
       
-      if (data && !error) {
-        setFileName(data.file_name);
-        setEditedName(data.file_name);
-        setFolderId(data.folder_id);
-        
-        // Convert database record to FileObject format
-        const fileObject: FileObject = {
-          id: data.id,
-          name: data.file_name,
-          size: data.size || 0,
-          created_at: data.created_at,
-          duration: data.duration,
-          status: data.status as any,
-          metadata: data.metadata,
-          folder_id: data.folder_id,
-          file_name: data.file_name,
-          file_path: data.file_path,
-          format: data.format
-        };
-        
-        setFileData(fileObject);
-        
-        // If there's a folder_id, fetch the folder name
-        if (data.folder_id) {
-          const { data: folderData, error: folderError } = await supabase
-            .from('folders')
-            .select('name')
-            .eq('id', data.folder_id)
-            .single();
-          
-          if (folderData && !folderError) {
-            setFolderName(folderData.name);
+      if (fileData) {
+        // Check if the file is deleted
+        if (fileData.status === 'deleted') {
+          // Redirect to the folder or dashboard
+          if (folderId) {
+            router.push(`/folders/${folderId}`);
+          } else {
+            router.push('/dashboard');
           }
+          return;
         }
+        
+        setFileName(fileData.name);
+        setEditedName(fileData.name);
+        setFileData(fileData);
+        setFolderName(folderName);
+        setFolderId(folderId);
       } else {
         setFileName("Unnamed File");
-        console.error("Error fetching file details:", error);
       }
     };
     
-    fetchFileDetails();
-  }, [fileId]);
+    loadFileDetails();
+  }, [fileId, router]);
   
   // Handle file rename
   const handleRename = async () => {
-    if (isEditing) {
-      // Save the new name
-      const supabase = createClientComponentClient();
-      const { error } = await supabase
-        .from('audio_files')
-        .update({ file_name: editedName })
-        .eq('id', fileId);
+    if (isEditing && user && fileData) {
+      const updatedFileData = await FileService.renameFile(
+        fileId,
+        fileData,
+        editedName,
+        user.id
+      );
       
-      if (!error) {
-        setFileName(editedName);
+      if (updatedFileData) {
+        setFileName(updatedFileData.name);
+        setFileData(updatedFileData);
       } else {
-        console.error("Error renaming file:", error);
-        // Revert to original name
+        // Revert to original name on error
         setEditedName(fileName);
       }
     }
@@ -140,29 +113,23 @@ export default function ClientFileDetailsPage({ fileId }: ClientFileDetailsPageP
   
   // Handle file delete
   const handleDelete = async () => {
-    const supabase = createClientComponentClient();
-    const { error } = await supabase
-      .from('audio_files')
-      .update({ status: 'deleted' })
-      .eq('id', fileId);
+    const success = await FileService.deleteFile(fileId);
     
-    if (!error) {
+    if (success) {
       // Navigate back to the folder or dashboard
       if (folderId) {
         router.push(`/folders/${folderId}`);
       } else {
         router.push('/dashboard');
       }
-    } else {
-      console.error("Error deleting file:", error);
     }
     
     setIsDeleteDialogOpen(false);
   };
   
-  // Handle export (placeholder for now)
+  // Handle export
   const handleExport = () => {
-    alert("Export functionality will be implemented in task 6.6");
+    FileService.exportFile(fileId);
   };
   
   return (

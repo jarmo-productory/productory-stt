@@ -16,7 +16,8 @@ export async function GET(
     return createAuthErrorResponse(authResult);
   }
 
-  const { jobId } = params;
+  // Properly await and destructure params
+  const jobId = params.jobId;
 
   try {
     // Get job details

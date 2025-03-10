@@ -52,6 +52,15 @@ if (!WORKER_API_KEY) {
   process.exit(1);
 }
 
+// Add this at the beginning of the file, after the imports
+const DEBUG = process.argv.includes('--debug');
+
+function debugLog(...args) {
+  if (DEBUG) {
+    console.log('[DEBUG]', ...args);
+  }
+}
+
 /**
  * Main function to run the worker
  */
@@ -77,18 +86,17 @@ async function runWorker() {
 async function runContinuous() {
   console.log('Starting worker in continuous mode...');
   
-  // Set up polling interval
+  // Poll for jobs at regular intervals
   const intervalId = setInterval(async () => {
     try {
-      console.log(`[${new Date().toISOString()}] Polling for jobs...`);
-      
-      // Call the worker API
-      const response = await fetch(`${API_URL}/api/jobs/worker?maxJobs=${MAX_JOBS}&mode=single`, {
+      // Call the worker API in batch mode
+      const response = await fetch(`${API_URL}/api/jobs/worker`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${WORKER_API_KEY}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({ maxJobs: MAX_JOBS, mode: 'batch' })
       });
       
       if (!response.ok) {
@@ -97,12 +105,58 @@ async function runContinuous() {
       }
       
       const data = await response.json();
-      console.log(`Processed ${data.processed || 0} jobs`);
       
-      if (data.results && data.results.length > 0) {
-        console.log('Job results:', data.results);
-      } else {
-        console.log('No jobs processed in this batch');
+      if (data.message === 'No pending jobs found') {
+        console.log('No pending jobs found');
+        return;
+      }
+      
+      if (data.mode === 'batch' && data.jobs && data.jobs.length > 0) {
+        console.log(`Found ${data.jobs.length} pending jobs`);
+        
+        // Process each job individually
+        for (const job of data.jobs) {
+          console.log(`Processing job ${job.id} (${job.type})...`);
+          
+          // Update job status to processing
+          await fetch(`${API_URL}/api/jobs/update`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${WORKER_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ jobId: job.id, status: 'processing' })
+          });
+          
+          // Call the worker API to process the job
+          const jobResponse = await fetch(`${API_URL}/api/jobs/worker`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${WORKER_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ maxJobs: 1, mode: 'single', jobId: job.id })
+          });
+          
+          if (!jobResponse.ok) {
+            console.error(`Error processing job ${job.id}: ${jobResponse.status} ${jobResponse.statusText}`);
+            
+            // Update job status to failed
+            await fetch(`${API_URL}/api/jobs/update`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${WORKER_API_KEY}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ jobId: job.id, status: 'failed' })
+            });
+            
+            continue;
+          }
+          
+          const jobData = await jobResponse.json();
+          console.log(`Job ${job.id} processed:`, jobData);
+        }
       }
     } catch (error) {
       console.error('Error polling for jobs:', error);
@@ -125,13 +179,21 @@ async function runContinuous() {
 async function runSingleBatch() {
   try {
     // Call the worker API in single run mode
-    const response = await fetch(`${API_URL}/api/jobs/worker?maxJobs=${MAX_JOBS}&mode=single`, {
+    const response = await fetch(`${API_URL}/api/jobs/worker`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${WORKER_API_KEY}`,
         'Content-Type': 'application/json'
-      }
+      },
+      body: JSON.stringify({ maxJobs: MAX_JOBS, mode: 'single' })
     });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Error from worker API: ${response.status} ${response.statusText}`);
+      console.error('Error details:', errorText);
+      process.exit(1);
+    }
     
     const data = await response.json();
     console.log('Worker completed single run:', data);
@@ -164,28 +226,66 @@ function hasArg(name) {
  * Simple test function to verify the worker API is working
  */
 async function testWorkerAPI() {
-  console.log('Testing worker API...');
-  console.log(`API URL: ${API_URL}`);
-  console.log(`Worker API Key: ${WORKER_API_KEY ? '****' + WORKER_API_KEY.slice(-4) : 'Not set'}`);
-  
   try {
-    // Make a simple GET request to the API to check if it's reachable
-    const response = await fetch(`${API_URL}/api`, {
-      method: 'GET',
+    console.log('Testing worker API...');
+    console.log('API URL:', API_URL);
+    console.log('Worker API Key:', WORKER_API_KEY.substring(0, 4) + '****' + WORKER_API_KEY.substring(WORKER_API_KEY.length - 4));
+    
+    const response = await fetch(`${API_URL}/api/jobs/worker`, {
+      method: 'POST',
       headers: {
+        'Authorization': `Bearer ${WORKER_API_KEY}`,
         'Content-Type': 'application/json'
-      }
+      },
+      body: JSON.stringify({ maxJobs: 1, mode: 'single' })
     });
     
-    console.log(`API response status: ${response.status}`);
+    debugLog('API response status:', response.status);
     
-    if (response.ok) {
-      console.log('API is reachable!');
-    } else {
-      console.log('API returned an error status code');
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API is not reachable: ${response.status} ${response.statusText}`);
+      console.error('Error details:', errorText);
+      return false;
     }
+    
+    console.log('API response status:', response.status);
+    console.log('API is reachable!');
+    return true;
   } catch (error) {
-    console.error('Error connecting to API:', error);
+    console.error('Error testing worker API:', error);
+    return false;
+  }
+}
+
+// Find the processJobs function and update it
+async function processJobs(mode = 'continuous', maxJobs = 10) {
+  try {
+    console.log(`Processing jobs in mode: ${mode}, maxJobs: ${maxJobs}`);
+    
+    // Call the worker API to process jobs
+    const response = await fetch(`${API_URL}/api/jobs/worker`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${WORKER_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ maxJobs, mode: mode === 'continuous' ? 'batch' : 'single' })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Error processing jobs: ${response.status} ${response.statusText}`);
+      console.error('Error details:', errorText);
+      return { error: `API error: ${response.status} ${response.statusText}` };
+    }
+    
+    const data = await response.json();
+    
+    return data;
+  } catch (error) {
+    console.error('Error processing jobs:', error);
+    return { error: error.message || 'Unknown error' };
   }
 }
 

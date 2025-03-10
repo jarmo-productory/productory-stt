@@ -15,8 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { TranscriptionRequest } from "@/app/components/files/TranscriptionRequest";
-import { TranscriptionView } from "@/app/components/files/TranscriptionView";
+import { TranscriptionRequest, TranscriptionView } from "@/app/components/files";
 import { storagePathUtil } from "@/lib/utils/storage";
 import { useAuth } from "@/contexts/AuthContext";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
@@ -28,36 +27,37 @@ interface TranscriptionColumnProps {
 export function TranscriptionColumn({ file }: TranscriptionColumnProps) {
   const [transcriptionId, setTranscriptionId] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [audioUrl, setAudioUrl] = useState<string>('');
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuth();
   const supabase = createClientComponentClient();
   
-  // Check if file has an existing transcription
+  // Check for existing transcription
   useEffect(() => {
     async function checkExistingTranscription() {
       if (!file) return;
       
       try {
-        setLoading(true);
-        const response = await fetch(`/api/files/${file.id}/transcription`);
+        const { data, error } = await supabase
+          .from('transcriptions')
+          .select('id')
+          .eq('file_id', file.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
         
-        if (response.ok) {
-          const data = await response.json();
-          if (data.transcription) {
-            setTranscriptionId(data.transcription.id);
-            setJobId(data.job?.id || null);
-          }
+        if (data && !error) {
+          setTranscriptionId(data.id);
         }
       } catch (error) {
-        console.error('Error checking for existing transcription:', error);
+        console.log('No existing transcription found');
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     }
     
     checkExistingTranscription();
-  }, [file]);
+  }, [file, supabase]);
   
   // Get audio URL from file
   useEffect(() => {
@@ -92,82 +92,85 @@ export function TranscriptionColumn({ file }: TranscriptionColumnProps) {
           return;
         }
         
-        // Check if file_path already includes the prefix
+        // Try multiple path variations to find the correct one
+        const pathVariations = [];
+        
+        // 1. Use the file_path directly if it includes the prefix
         if (filePath.startsWith('audio/')) {
-          console.log('Using full file_path:', filePath);
-          // File path already includes the prefix, use it directly
-          const { data, error } = await supabase
-            .storage
-            .from('audio-files')
-            .createSignedUrl(filePath, 3600);
-          
-          if (!error) {
-            setAudioUrl(data.signedUrl);
-            console.log('Audio URL created using full file_path');
-            return;
-          } else {
-            console.warn('Failed to create signed URL with full file_path:', error);
+          pathVariations.push(filePath);
+        }
+        
+        // 2. Construct the path using StoragePathUtil
+        const constructedPath = storagePathUtil.getAudioPath(user.id, filePath);
+        pathVariations.push(constructedPath);
+        
+        // 3. Try with just the filename (in case it's stored at the root)
+        const fileName = filePath.split('/').pop() || filePath;
+        pathVariations.push(fileName);
+        
+        // 4. Try with just the user ID prefix
+        pathVariations.push(`audio/${user.id}/${fileName}`);
+        
+        console.log('Trying path variations:', pathVariations);
+        
+        // Try each path variation until one works
+        for (const path of pathVariations) {
+          try {
+            console.log('Trying path:', path);
+            const { data, error } = await supabase
+              .storage
+              .from('audio-files')
+              .createSignedUrl(path, 3600);
+            
+            if (!error && data) {
+              setAudioUrl(data.signedUrl);
+              console.log('Audio URL created successfully with path:', path);
+              return;
+            }
+          } catch (e) {
+            console.warn(`Failed with path ${path}:`, e);
           }
         }
         
-        // Fallback: Construct the path using StoragePathUtil
-        console.log('Constructing path with StoragePathUtil');
-        const audioPath = storagePathUtil.getAudioPath(user.id, filePath);
-        console.log('Constructed audio path:', audioPath);
-        
-        // Generate a signed URL with the Supabase client
-        const { data, error } = await supabase
-          .storage
-          .from('audio-files')
-          .createSignedUrl(audioPath, 3600); // 1 hour expiry
-        
-        if (error) {
-          console.error('Error creating signed URL:', error);
-          return;
-        }
-        
-        setAudioUrl(data.signedUrl);
-        console.log('Audio URL created using constructed path');
+        console.error('All path variations failed to create a signed URL');
       } catch (error) {
-        console.error('Error getting audio URL:', error);
+        console.error('Error creating signed URL:', error);
       }
     }
     
     getAudioUrl();
   }, [file, user, supabase]);
   
+  // Handle transcription creation
   const handleTranscriptionCreated = (newTranscriptionId: string, newJobId: string) => {
     setTranscriptionId(newTranscriptionId);
     setJobId(newJobId);
   };
   
-  if (!file) {
-    return <div className="p-4">No file selected</div>;
-  }
-  
   return (
-    <div className="border rounded-lg p-4 bg-card h-full flex flex-col">
-      <h2 className="text-lg font-medium mb-4">Transcription</h2>
-      
-      <div className="space-y-4 flex-1 flex flex-col">
-        {/* Show TranscriptionRequest if no transcription exists */}
-        {!loading && !transcriptionId && (
-          <TranscriptionRequest 
-            fileId={file.id} 
-            onTranscriptionCreated={handleTranscriptionCreated}
-            className="flex-1"
-          />
-        )}
-        
-        {/* Show TranscriptionView if transcription exists */}
-        {!loading && transcriptionId && (
-          <TranscriptionView 
-            transcriptionId={transcriptionId}
-            audioUrl={audioUrl}
-            className="flex-1"
-          />
-        )}
+    <div className="bg-white rounded-lg shadow-sm p-6">
+      <div className="flex items-center mb-4">
+        <FileText className="h-5 w-5 mr-2 text-blue-500" />
+        <h2 className="text-lg font-semibold">Transcription</h2>
       </div>
+      
+      {isLoading ? (
+        <div className="flex justify-center items-center h-40">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+      ) : transcriptionId ? (
+        <TranscriptionView 
+          transcriptionId={transcriptionId} 
+          audioUrl={audioUrl || undefined}
+          className="w-full"
+          jobId={jobId || undefined}
+        />
+      ) : (
+        <TranscriptionRequest 
+          fileId={file?.id || ''} 
+          onTranscriptionCreated={handleTranscriptionCreated}
+        />
+      )}
     </div>
   );
 } 

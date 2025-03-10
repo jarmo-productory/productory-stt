@@ -20,6 +20,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { storagePathUtil } from "@/lib/utils/storage";
+import { Upload as TusUpload } from 'tus-js-client';
 
 // Supported file formats
 const SUPPORTED_FORMATS = ['.wav', '.mp3', '.m4a', '.flac'];
@@ -378,19 +379,105 @@ export function FileUpload({
         const audioPath = storagePathUtil.getAudioPath(userId, formattedFilename);
         console.log(`Constructed audio path: ${audioPath}`);
         
-        // Upload to Supabase Storage
-        const { data: storageData, error: storageError } = await supabase.storage
-          .from('audio-files')
-          .upload(audioPath, fileObj.file, {
-            cacheControl: '3600',
-            upsert: false
-          });
+        // Get the current session for authentication
+        const { data: { session } } = await supabase.auth.getSession();
         
-        if (storageError) {
-          throw storageError;
+        if (!session) {
+          throw new Error('Authentication session is required for upload');
         }
         
-        console.log(`File uploaded to storage: ${storageData.path}`);
+        // Create a cancellation controller
+        const controller = new AbortController();
+        
+        // Add cancel function to the file object
+        setSelectedFiles(prev => {
+          const updated = [...prev];
+          updated[i] = { 
+            ...updated[i], 
+            cancelUpload: () => controller.abort() 
+          };
+          return updated;
+        });
+        
+        // Use standard upload for small files (< 6MB) or resumable upload for larger files
+        if (fileObj.size < 6 * 1024 * 1024) {
+          // Standard upload for small files
+          const { data: storageData, error: storageError } = await supabase.storage
+            .from('audio-files')
+            .upload(audioPath, fileObj.file, {
+              cacheControl: '3600',
+              upsert: false
+            });
+          
+          if (storageError) {
+            throw storageError;
+          }
+          
+          console.log(`File uploaded to storage: ${storageData.path}`);
+        } else {
+          // Resumable upload for larger files using TUS protocol
+          await new Promise<void>((resolve, reject) => {
+            // Get the Supabase URL from the config
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+            
+            const upload = new TusUpload(fileObj.file, {
+              endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
+              retryDelays: [0, 3000, 5000, 10000, 20000],
+              headers: {
+                authorization: `Bearer ${session.access_token}`,
+                'x-upsert': 'false', // Set to true if you want to overwrite existing files
+              },
+              uploadDataDuringCreation: true,
+              removeFingerprintOnSuccess: true,
+              metadata: {
+                bucketName: 'audio-files',
+                objectName: audioPath,
+                contentType: fileObj.type,
+                cacheControl: '3600',
+              },
+              chunkSize: 6 * 1024 * 1024, // 6MB chunks as recommended by Supabase
+              onError: (error: Error) => {
+                console.error(`Upload error for ${fileObj.name}:`, error);
+                reject(error);
+              },
+              onProgress: (bytesUploaded: number, bytesTotal: number) => {
+                const progress = Math.round((bytesUploaded / bytesTotal) * 100);
+                console.log(`Upload progress for ${fileObj.name}: ${progress}%`);
+                
+                // Update progress in the UI
+                setSelectedFiles(prev => {
+                  const updated = [...prev];
+                  updated[i] = { ...updated[i], uploadProgress: progress };
+                  return updated;
+                });
+              },
+              onSuccess: () => {
+                console.log(`Upload completed for ${fileObj.name}`);
+                resolve();
+              }
+            });
+            
+            // Check for previous uploads to resume
+            upload.findPreviousUploads().then((previousUploads: any[]) => {
+              if (previousUploads.length) {
+                upload.resumeFromPreviousUpload(previousUploads[0]);
+              }
+              
+              // Start the upload
+              upload.start();
+            });
+            
+            // Handle cancellation
+            if (controller.signal) {
+              controller.signal.addEventListener('abort', () => {
+                upload.abort();
+                reject(new Error('Upload cancelled'));
+              });
+            }
+          });
+          
+          console.log(`File uploaded to storage: ${audioPath}`);
+        }
         
         // Save metadata to database
         const { data: dbData, error: dbError } = await supabase
