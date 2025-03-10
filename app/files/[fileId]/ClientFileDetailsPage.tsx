@@ -179,72 +179,85 @@ function FileDetailsContent({ fileId }: { fileId: string }) {
   
   return (
     <AppLayout>
-      {/* Breadcrumbs */}
-      <Breadcrumbs
-        items={[
-          { label: 'Dashboard', href: '/dashboard' },
-          ...(folderId ? [{ label: folderName, href: `/folders/${folderId}` }] : []),
-          { label: fileName, href: `/files/${fileId}` },
-        ]}
-      />
-      
-      {/* Use the shared PageHeader component */}
-      <PageHeader
-        title={fileName}
-        backHref={folderId ? `/folders/${folderId}` : '/dashboard'}
-        isEditing={isEditing}
-        editedName={editedName}
-        onEditChange={(value) => setEditedName(value)}
-        onStartEditing={startEditing}
-        onSave={handleRename}
-        onCancel={cancelEditing}
-        type="file"
-        actions={fileData && <FileActionsMenu file={fileData} onStartRename={startEditing} />}
-      />
-      
-      {/* Audio Player */}
-      <div className="px-4">
-        <AudioPlayer transcriptionStatus={transcriptionStatus} />
-      </div>
-      
-      {/* Tab layout */}
-      <div className="p-4"> {/* Removed pb-24 since we don't need extra padding for fixed player */}
-        <Tabs defaultValue={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="w-full justify-start mb-4">
-            <TabsTrigger value="transcription" className="flex items-center">
-              <FileText className="h-4 w-4 mr-2" />
-              Transcription
-            </TabsTrigger>
-            <TabsTrigger value="notes" className="flex items-center">
-              <StickyNote className="h-4 w-4 mr-2" />
-              Notes
-            </TabsTrigger>
-            <TabsTrigger value="ai-summary" className="flex items-center">
-              <Sparkles className="h-4 w-4 mr-2" />
-              AI Summary
-            </TabsTrigger>
-            <TabsTrigger value="overview" className="flex items-center">
-              <Info className="h-4 w-4 mr-2" />
-              Overview
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="transcription" className="mt-4">
-            <TranscriptionColumn file={fileData as any} />
-          </TabsContent>
-          
-          <TabsContent value="notes" className="mt-4">
-            <NotesTab file={fileData} />
-          </TabsContent>
-          
-          <TabsContent value="ai-summary" className="mt-4">
-            <AISummaryTab file={fileData} />
-          </TabsContent>
-          
-          <TabsContent value="overview" className="mt-4">
-            <OverviewTab file={fileData} />
-          </TabsContent>
-        </Tabs>
+      {/* Using flex and min-h-0 to ensure proper flex behavior */}
+      <div className="flex flex-col h-full min-h-0 overflow-hidden">
+        {/* Breadcrumbs - fixed height */}
+        <div className="flex-shrink-0">
+          <Breadcrumbs
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              ...(folderId ? [{ label: folderName, href: `/folders/${folderId}` }] : []),
+              { label: fileName, href: `/files/${fileId}` },
+            ]}
+          />
+        </div>
+        
+        {/* Page Header - fixed height */}
+        <div className="flex-shrink-0">
+          <PageHeader
+            title={fileName}
+            backHref={folderId ? `/folders/${folderId}` : '/dashboard'}
+            isEditing={isEditing}
+            editedName={editedName}
+            onEditChange={(value) => setEditedName(value)}
+            onStartEditing={startEditing}
+            onSave={handleRename}
+            onCancel={cancelEditing}
+            type="file"
+            actions={fileData && <FileActionsMenu file={fileData} onStartRename={startEditing} />}
+          />
+        </div>
+        
+        {/* Audio Player - fixed height */}
+        <div className="px-4 flex-shrink-0 mb-4">
+          <AudioPlayer transcriptionStatus={transcriptionStatus} />
+        </div>
+        
+        {/* Tab layout - grows to fill remaining space */}
+        <div className="flex-grow flex flex-col min-h-0">
+          <Tabs defaultValue={activeTab} onValueChange={handleTabChange} className="w-full flex flex-col h-full min-h-0">
+            {/* Tab navigation - always visible */}
+            <div className="flex-shrink-0 mb-4">
+              <TabsList className="w-full justify-start">
+                <TabsTrigger value="transcription" className="flex items-center">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Transcription
+                </TabsTrigger>
+                <TabsTrigger value="notes" className="flex items-center">
+                  <StickyNote className="h-4 w-4 mr-2" />
+                  Notes
+                </TabsTrigger>
+                <TabsTrigger value="ai-summary" className="flex items-center">
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  AI Summary
+                </TabsTrigger>
+                <TabsTrigger value="overview" className="flex items-center">
+                  <Info className="h-4 w-4 mr-2" />
+                  Overview
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            
+            {/* Tab content - scrollable */}
+            <div className="flex-grow overflow-auto min-h-0">
+              <TabsContent value="transcription" className="h-full min-h-0">
+                <TranscriptionColumn file={fileData as any} />
+              </TabsContent>
+              
+              <TabsContent value="notes" className="h-full min-h-0">
+                <NotesTab file={fileData} />
+              </TabsContent>
+              
+              <TabsContent value="ai-summary" className="h-full min-h-0">
+                <AISummaryTab file={fileData} />
+              </TabsContent>
+              
+              <TabsContent value="overview" className="h-full min-h-0">
+                <OverviewTab file={fileData} />
+              </TabsContent>
+            </div>
+          </Tabs>
+        </div>
       </div>
     </AppLayout>
   );

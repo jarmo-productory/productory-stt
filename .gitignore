@@ -76,3 +76,5 @@ logs
 
 # Documentation
 .docs/
+audio-files/
+scripts/test-audio-16k-mono.wav
