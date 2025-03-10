@@ -5,14 +5,17 @@ import { useRouter } from 'next/navigation';
 import { AppLayout } from "@/app/components/layout/AppLayout";
 import { Breadcrumbs } from "@/app/components/layout/Breadcrumbs";
 import { PageHeader } from "@/app/components/layout/PageHeader";
-import { FileAudio } from "lucide-react";
-import { OverviewColumn } from './components/OverviewColumn';
+import { FileAudio, FileText, StickyNote, Sparkles, Info } from "lucide-react";
 import { TranscriptionColumn } from './components/TranscriptionColumn';
 import { FileObject } from "@/contexts/FileContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { FileService } from "@/app/components/files/FileService";
 import { useFileActions } from "@/app/components/files/FileActionsProvider";
 import { FileActionsMenu } from "@/app/components/files/FileActionsMenu";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { NotesTab } from './components/NotesTab';
+import { AISummaryTab } from './components/AISummaryTab';
+import { OverviewTab } from './components/OverviewTab';
 
 interface ClientFileDetailsPageProps {
   fileId: string;
@@ -25,6 +28,7 @@ export default function ClientFileDetailsPage({ fileId }: ClientFileDetailsPageP
   const [folderName, setFolderName] = useState("");
   const [folderId, setFolderId] = useState<string | null>(null);
   const [fileData, setFileData] = useState<FileObject | null>(null);
+  const [activeTab, setActiveTab] = useState("transcription");
   const router = useRouter();
   const { user } = useAuth();
   const { handleRenameFile, setSelectedFile, setOnFileUpdated } = useFileActions();
@@ -102,6 +106,21 @@ export default function ClientFileDetailsPage({ fileId }: ClientFileDetailsPageP
     setEditedName(fileName);
   };
   
+  // Handle tab change
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    // Optionally save the active tab to localStorage
+    localStorage.setItem('fileDetailsActiveTab', value);
+  };
+  
+  // Load saved tab preference
+  useEffect(() => {
+    const savedTab = localStorage.getItem('fileDetailsActiveTab');
+    if (savedTab) {
+      setActiveTab(savedTab);
+    }
+  }, []);
+  
   return (
     <AppLayout>
       {/* Breadcrumbs */}
@@ -127,10 +146,44 @@ export default function ClientFileDetailsPage({ fileId }: ClientFileDetailsPageP
         actions={fileData && <FileActionsMenu file={fileData} onStartRename={startEditing} />}
       />
       
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-        <OverviewColumn file={fileData} />
-        <TranscriptionColumn file={fileData as any} />
+      {/* Tab layout */}
+      <div className="p-4">
+        <Tabs defaultValue={activeTab} onValueChange={handleTabChange} className="w-full">
+          <TabsList className="w-full justify-start mb-4">
+            <TabsTrigger value="transcription" className="flex items-center">
+              <FileText className="h-4 w-4 mr-2" />
+              Transcription
+            </TabsTrigger>
+            <TabsTrigger value="notes" className="flex items-center">
+              <StickyNote className="h-4 w-4 mr-2" />
+              Notes
+            </TabsTrigger>
+            <TabsTrigger value="ai-summary" className="flex items-center">
+              <Sparkles className="h-4 w-4 mr-2" />
+              AI Summary
+            </TabsTrigger>
+            <TabsTrigger value="overview" className="flex items-center">
+              <Info className="h-4 w-4 mr-2" />
+              Overview
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="transcription" className="mt-4">
+            <TranscriptionColumn file={fileData as any} />
+          </TabsContent>
+          
+          <TabsContent value="notes" className="mt-4">
+            <NotesTab file={fileData} />
+          </TabsContent>
+          
+          <TabsContent value="ai-summary" className="mt-4">
+            <AISummaryTab file={fileData} />
+          </TabsContent>
+          
+          <TabsContent value="overview" className="mt-4">
+            <OverviewTab file={fileData} />
+          </TabsContent>
+        </Tabs>
       </div>
     </AppLayout>
   );
