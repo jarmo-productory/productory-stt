@@ -1,215 +1,143 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { createClient } from '@supabase/supabase-js';
+import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
 import { processTranscriptionJob } from '@/lib/jobs/transcription';
+
+const WORKER_API_KEY = process.env.WORKER_API_KEY;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Validate worker authentication
+function validateWorkerAuth(request: Request) {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return false;
+  }
+  
+  const token = authHeader.split(' ')[1];
+  return token === WORKER_API_KEY;
+}
 
 /**
  * POST /api/jobs/worker
  * Starts the worker process to handle background jobs
  * This endpoint should be called by a scheduled task or cron job
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    console.log('[Worker API] Received request');
-    
-    // Verify the worker API key
-    if (!verifyWorkerApiKey(request)) {
-      console.error('[Worker API] Invalid API key');
+    // Validate worker authentication
+    if (!validateWorkerAuth(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
-    // Parse the request body
-    let body;
-    try {
-      body = await request.json();
-    } catch (error) {
-      console.error('[Worker API] Error parsing request body:', error);
-      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
-    }
-    
-    const maxJobs = body.maxJobs || 10;
-    const mode = body.mode || 'batch';
-    const specificJobId = body.jobId; // Optional: process a specific job
-    
-    console.log(`[Worker API] Processing jobs: maxJobs=${maxJobs}, mode=${mode}, specificJobId=${specificJobId || 'none'}`);
-    
-    // Create a Supabase client with service role credentials
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
-    if (!supabaseUrl || !supabaseServiceRoleKey) {
-      console.error('[Worker API] Missing Supabase credentials');
-      return NextResponse.json(
-        { error: 'Server configuration error' },
-        { status: 500 }
-      );
-    }
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
-    
-    // Get pending jobs from the job queue
-    console.log('[Worker API] Fetching pending jobs');
-    
-    let query = supabase
-      .from('job_queue')
-      .select('*')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: true });
-    
-    // If a specific job ID is provided, filter by that
-    if (specificJobId) {
-      query = query.eq('id', specificJobId);
-    }
-    
-    // Limit the number of jobs
-    query = query.limit(maxJobs);
-    
-    const { data: jobs, error: jobsError } = await query;
-    
-    if (jobsError) {
-      console.error('[Worker API] Error fetching jobs:', jobsError);
-      return NextResponse.json(
-        { error: 'Failed to fetch jobs', details: jobsError.message },
-        { status: 500 }
-      );
-    }
-    
-    console.log(`[Worker API] Found ${jobs?.length || 0} pending jobs`);
-    
-    if (!jobs || jobs.length === 0) {
-      return NextResponse.json({ message: 'No pending jobs found' });
-    }
-    
-    // Process jobs based on mode
-    if (mode === 'single') {
-      // Process only the first job
-      const job = jobs[0];
-      console.log(`[Worker API] Processing single job: ${job.id} (${job.job_type})`);
-      
+
+    // Use service role client for worker operations
+    const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+    const body = await request.json();
+    const { mode = 'single', maxJobs = 1, jobId } = body;
+
+    // Single job mode - process specific job
+    if (mode === 'single' && jobId) {
       try {
-        // Update job status to processing
-        const { error: updateError } = await supabase
+        // Get the job details
+        const { data: job, error: jobError } = await supabase
           .from('job_queue')
-          .update({
-            status: 'processing',
-            started_at: new Date().toISOString()
-          })
-          .eq('id', job.id);
-        
-        if (updateError) {
-          console.error(`[Worker API] Error updating job status: ${updateError.message}`);
-          throw new Error(`Failed to update job status: ${updateError.message}`);
+          .select('*')
+          .eq('id', jobId)
+          .single();
+
+        if (jobError || !job) {
+          return NextResponse.json(
+            { error: `Job not found: ${jobError?.message || 'Unknown error'}` },
+            { status: 404 }
+          );
         }
-        
+
         // Process the job based on its type
-        let result;
-        if (job.job_type === 'transcription') {
-          console.log(`[Worker API] Processing transcription job: ${job.id}`);
-          const { processTranscriptionJob } = await import('@/lib/jobs/transcription');
-          result = await processTranscriptionJob(job, supabase);
-        } else {
-          throw new Error(`Unsupported job type: ${job.job_type}`);
+        switch (job.job_type) {
+          case 'transcription':
+            const result = await processTranscriptionJob(job, supabase);
+            return NextResponse.json({ success: true, result });
+
+          default:
+            return NextResponse.json(
+              { error: `Unsupported job type: ${job.job_type}` },
+              { status: 400 }
+            );
         }
-        
-        // Update job status to completed
-        const { error: completeError } = await supabase
-          .from('job_queue')
-          .update({
-            status: 'completed',
-            completed_at: new Date().toISOString(),
-            result
-          })
-          .eq('id', job.id);
-        
-        if (completeError) {
-          console.error(`[Worker API] Error completing job: ${completeError.message}`);
-          throw new Error(`Failed to complete job: ${completeError.message}`);
-        }
-        
-        console.log(`[Worker API] Job ${job.id} completed successfully`);
-        
-        return NextResponse.json({
-          mode: 'single',
-          processed: 1,
-          results: [
-            {
-              jobId: job.id,
-              type: job.job_type,
-              status: 'completed',
-              success: true
-            }
-          ]
-        });
-      } catch (error) {
-        console.error(`[Worker API] Error processing job ${job.id}:`, error);
+      } catch (error: any) {
+        console.error('Error processing job:', error);
         
         // Update job status to failed
-        try {
-          const { error: failError } = await supabase
-            .from('job_queue')
-            .update({
-              status: 'failed',
-              completed_at: new Date().toISOString(),
-              result: {
-                error: error instanceof Error ? error.message : String(error),
-                success: false
-              }
-            })
-            .eq('id', job.id);
-          
-          if (failError) {
-            console.error(`[Worker API] Error updating failed job: ${failError.message}`);
-          }
-        } catch (updateError) {
-          console.error(`[Worker API] Error updating job status to failed: ${updateError}`);
-        }
-        
-        return NextResponse.json({
-          mode: 'single',
-          processed: 1,
-          results: [
-            {
-              jobId: job.id,
-              type: job.job_type,
-              status: 'failed',
-              success: false,
-              error: error instanceof Error ? error.message : String(error)
-            }
-          ]
-        });
+        await supabase
+          .from('job_queue')
+          .update({
+            status: 'failed',
+            error_message: error.message || 'Unknown error',
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', jobId);
+
+        return NextResponse.json(
+          { error: `Job processing failed: ${error.message}` },
+          { status: 500 }
+        );
       }
-    } else {
-      // Batch mode - return job IDs for the worker to process
-      return NextResponse.json({
-        mode: 'batch',
-        jobs: jobs.map(job => ({
-          id: job.id,
-          type: job.job_type
-        }))
-      });
     }
-  } catch (error) {
-    console.error('[Worker API] Unhandled error:', error);
+
+    // Batch mode - get pending jobs
+    if (mode === 'batch') {
+      const { data: jobs, error: jobsError } = await supabase
+        .from('job_queue')
+        .select('*')
+        .eq('status', 'pending')
+        .order('priority', { ascending: false })
+        .order('created_at', { ascending: true })
+        .limit(maxJobs);
+
+      if (jobsError) {
+        return NextResponse.json(
+          { error: `Failed to fetch jobs: ${jobsError.message}` },
+          { status: 500 }
+        );
+      }
+
+      if (!jobs || jobs.length === 0) {
+        return NextResponse.json({ message: 'No pending jobs found' });
+      }
+
+      return NextResponse.json({ jobs });
+    }
+
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : String(error) },
+      { error: 'Invalid mode specified' },
+      { status: 400 }
+    );
+
+  } catch (error: any) {
+    console.error('Worker API error:', error);
+    return NextResponse.json(
+      { error: `Internal server error: ${error.message}` },
       { status: 500 }
     );
   }
 }
 
-// Verify worker API key
-function verifyWorkerApiKey(request: NextRequest) {
-  const authHeader = request.headers.get('Authorization');
-  console.log('Auth header:', authHeader ? 'Present' : 'Missing');
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.error('Invalid auth header format');
-    return false;
+// Health check endpoint
+export async function GET(request: Request) {
+  try {
+    if (!validateWorkerAuth(request)) {
+      console.log('Health check: Unauthorized request');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    console.log('Health check: Authorized request received');
+    return NextResponse.json({ status: 'healthy' });
+  } catch (error: any) {
+    console.error('Health check error:', error);
+    return NextResponse.json(
+      { status: 'unhealthy', error: error.message },
+      { status: 500 }
+    );
   }
-  
-  const apiKey = authHeader.split(' ')[1];
-  const expectedKey = process.env.WORKER_API_KEY;
-  console.log('API key check:', apiKey ? 'Present' : 'Missing', 'Expected key:', expectedKey ? 'Present' : 'Missing');
-  console.log('API key match:', apiKey === expectedKey);
-  
-  return apiKey === expectedKey;
 } 

@@ -181,6 +181,67 @@ export class StoragePathUtil {
   }
 
   /**
+   * Gets the storage path for a transcription-optimized audio file
+   * @param userId The user ID who owns the file
+   * @param fileName The name of the file
+   * @returns The standardized path for the transcription-optimized file (16kHz mono WAV)
+   * @throws {PathConstructionError} If the path cannot be constructed
+   */
+  getTranscriptionPath(userId: string, fileName: string): string {
+    try {
+      if (!userId) {
+        throw new PathConstructionError(
+          ERROR_MESSAGES.MISSING_USER_ID,
+          { userId, fileName }
+        );
+      }
+
+      if (!fileName) {
+        throw new PathConstructionError(
+          ERROR_MESSAGES.MISSING_FILE_NAME,
+          { userId, fileName }
+        );
+      }
+
+      const baseName = this.removeExtension(fileName);
+      const path = `${this.config.audioPathPrefix}/${userId}/transcription/${baseName}.wav`;
+      
+      this.log('info', 'Transcription path constructed', { userId, fileName, path });
+      return path;
+    } catch (error) {
+      if (error instanceof StorageError) {
+        throw error;
+      }
+      throw new PathConstructionError(
+        ERROR_MESSAGES.PATH_CONSTRUCTION_ERROR,
+        { userId, fileName, originalError: error }
+      );
+    }
+  }
+
+  /**
+   * Gets the optimal audio format parameters for transcription
+   * @returns The optimal format parameters for transcription
+   */
+  getOptimalTranscriptionFormat(): { format: string; sampleRate: number; channels: number } {
+    return {
+      format: 'wav',
+      sampleRate: 16000,
+      channels: 1
+    };
+  }
+
+  /**
+   * Removes the extension from a filename
+   * @private
+   * @param fileName The filename with extension
+   * @returns The filename without extension
+   */
+  private removeExtension(fileName: string): string {
+    return fileName.replace(/\.[^/.]+$/, '');
+  }
+
+  /**
    * Get the full storage path including bucket
    * @param path The file path within the bucket
    * @param bucket Optional bucket name, defaults to the configured default bucket
@@ -508,6 +569,127 @@ export class StoragePathUtil {
     
     this.log('error', 'Operation failed after all retries', { error: lastError });
     throw lastError;
+  }
+
+  /**
+   * Get a signed URL for a file
+   * @param path The file path within the bucket
+   * @param bucket Optional bucket name, defaults to the configured default bucket
+   * @param expiresIn Optional expiration time in seconds, defaults to 60
+   * @returns The signed URL for the file
+   * @throws {PathConstructionError} If the URL cannot be constructed
+   */
+  getSignedUrl(path: string, bucket?: string, expiresIn: number = 60): string {
+    try {
+      if (!path) {
+        throw new PathConstructionError(
+          'Path is required',
+          { path, bucket, expiresIn }
+        );
+      }
+
+      if (!this.config.baseUrl) {
+        throw new ConfigurationError(
+          ERROR_MESSAGES.MISSING_BASE_URL,
+          { config: this.config }
+        );
+      }
+
+      const bucketName = bucket || this.config.defaultBucket;
+      // Note: This is a simplified version. In a real implementation, you would
+      // need to generate a proper signed URL with authentication.
+      const url = `${this.config.baseUrl}/storage/v1/object/sign/${bucketName}/${path}?expires=${expiresIn}`;
+      this.log('info', 'Signed URL constructed', { path, bucket, expiresIn, url });
+      return url;
+    } catch (error) {
+      if (error instanceof StorageError) {
+        throw error;
+      }
+      throw new PathConstructionError(
+        ERROR_MESSAGES.PATH_CONSTRUCTION_ERROR,
+        { path, bucket, expiresIn, originalError: error }
+      );
+    }
+  }
+
+  /**
+   * Gets the public URL for a transcription-optimized file
+   * @param userId The user ID who owns the file
+   * @param fileName The name of the file
+   * @returns The public URL for the transcription-optimized file
+   * @throws {PathConstructionError} If the URL cannot be constructed
+   */
+  getTranscriptionUrl(userId: string, fileName: string): string {
+    try {
+      const path = this.getTranscriptionPath(userId, fileName);
+      return this.getPublicUrl(path);
+    } catch (error) {
+      if (error instanceof StorageError) {
+        throw error;
+      }
+      throw new PathConstructionError(
+        ERROR_MESSAGES.PATH_CONSTRUCTION_ERROR,
+        { userId, fileName, originalError: error }
+      );
+    }
+  }
+
+  /**
+   * Gets the transcription URL for a file
+   * @param audioFile The audio file object with transcription_formats
+   * @returns The URL for the transcription-optimized format or the original if not available
+   */
+  getTranscriptionUrlFromFile(audioFile: { 
+    file_path: string; 
+    user_id: string; 
+    file_name: string;
+    transcription_formats?: { optimized?: { path: string } } 
+  }): string {
+    try {
+      // If transcription formats are available in the database
+      if (audioFile.transcription_formats?.optimized) {
+          const path = audioFile.transcription_formats.optimized.path;
+          return this.getPublicUrl(path);
+      }
+      
+      // If no transcription formats are available, use the original
+      return this.getPublicUrl(audioFile.file_path);
+    } catch (error) {
+      this.log('error', 'Error getting transcription URL', { 
+        audioFile, 
+        error 
+      });
+      // Fall back to original file path
+      return this.getPublicUrl(audioFile.file_path);
+    }
+  }
+
+  /**
+   * Checks if the optimized transcription format is available for a file
+   * @param audioFile The audio file object with transcription_formats
+   * @returns Whether the transcription format is available
+   */
+  isTranscriptionFormatAvailable(audioFile: { 
+    transcription_formats?: { optimized?: any } 
+  }): boolean {
+    return (
+      audioFile.transcription_formats !== undefined && 
+      audioFile.transcription_formats !== null &&
+      audioFile.transcription_formats.optimized !== undefined
+    );
+  }
+
+  /**
+   * Gets all available transcription formats for an audio file
+   * @param audioFile The audio file object with transcription_formats
+   * @returns Array of available transcription service names
+   */
+  getAvailableTranscriptionFormats(audioFile: { 
+    transcription_formats?: Record<string, any> 
+  }): string[] {
+    if (!audioFile.transcription_formats) return [];
+    
+    return Object.keys(audioFile.transcription_formats);
   }
 }
 

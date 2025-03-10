@@ -2,10 +2,12 @@
   "extends": [
     "next/core-web-vitals",
     "plugin:import/recommended",
-    "plugin:import/typescript"
+    "plugin:import/typescript",
+    "plugin:@typescript-eslint/recommended"
   ],
   "plugins": [
-    "import"
+    "import",
+    "@typescript-eslint"
   ],
   "rules": {
     "react/no-unescaped-entities": "off",
@@ -16,6 +18,20 @@
     "@typescript-eslint/no-explicit-any": "warn",
     "react-hooks/rules-of-hooks": "warn",
     "react/jsx-no-comment-textnodes": "warn",
+    
+    // Strict null checking rules
+    "@typescript-eslint/no-non-null-assertion": "error",
+    "@typescript-eslint/explicit-function-return-type": ["warn", {
+      "allowExpressions": true,
+      "allowTypedFunctionExpressions": true,
+      "allowHigherOrderFunctions": true
+    }],
+    "@typescript-eslint/strict-boolean-expressions": ["warn", {
+      "allowString": false,
+      "allowNumber": false,
+      "allowNullableObject": false
+    }],
+    "@typescript-eslint/no-unnecessary-condition": "warn",
     
     // Import path rules
     "import/no-duplicates": "error",

@@ -34,7 +34,7 @@ export class FileService {
         // Convert database record to FileObject format
         fileData = {
           id: data.id,
-          name: data.file_name,
+          name: data.metadata?.display_name || data.file_name,
           size: data.size || 0,
           created_at: data.created_at,
           duration: data.duration,
@@ -89,20 +89,27 @@ export class FileService {
     const supabase = createClientComponentClient();
     
     try {
-      console.log('Renaming file:', { 
+      console.log('Renaming file display name:', { 
         fileId, 
-        currentName: fileData.file_name, 
-        newName,
-        currentPath: fileData.file_path,
-        storagePrefix: fileData.storage_prefix,
-        normalizedPath: fileData.normalized_path
+        currentName: fileData.name || fileData.file_name, 
+        newName
       });
       
-      // First, update the file_name in the database
-      // The database trigger will handle updating the file_path
+      // Get current metadata or initialize empty object
+      const metadata = fileData.metadata || {};
+      
+      // Update the display_name in metadata
+      const updatedMetadata = {
+        ...metadata,
+        display_name: newName
+      };
+      
+      // Only update the metadata field, not file_name or file_path
       const { data: updatedData, error: updateError } = await supabase
         .from('audio_files')
-        .update({ file_name: newName })
+        .update({ 
+          metadata: updatedMetadata
+        })
         .eq('id', fileId)
         .select()
         .single();
@@ -114,79 +121,15 @@ export class FileService {
       
       console.log('Database update successful:', updatedData);
       
-      // If we have file paths, try to handle the storage operations
-      // But don't fail the rename if storage operations fail
-      if (fileData.file_path && updatedData.file_path && fileData.file_path !== updatedData.file_path) {
-        try {
-          // Try different possible paths for the source file
-          const possibleSourcePaths = [
-            fileData.file_path,
-            fileData.normalized_path,
-            // If the path doesn't include the storage prefix, try with it
-            fileData.file_path.includes('audio/') ? fileData.file_path : `audio/${userId}/${fileData.file_path}`
-          ].filter(Boolean); // Remove any undefined/null values
-          
-          const newPath = updatedData.file_path;
-          let copySuccessful = false;
-          
-          console.log('Trying possible source paths:', possibleSourcePaths);
-          
-          // Try each possible source path until one works
-          for (const sourcePath of possibleSourcePaths) {
-            if (!sourcePath) continue;
-            
-            try {
-              console.log(`Attempting to copy from ${sourcePath} to ${newPath}`);
-              const { data: copyData, error: copyError } = await supabase
-                .storage
-                .from(fileData.bucket_name || 'audio-files')
-                .copy(sourcePath, newPath);
-                
-              if (!copyError) {
-                console.log('File copied successfully:', copyData);
-                copySuccessful = true;
-                
-                // Try to delete the original file
-                try {
-                  const { error: deleteError } = await supabase
-                    .storage
-                    .from(fileData.bucket_name || 'audio-files')
-                    .remove([sourcePath]);
-                    
-                  if (deleteError) {
-                    console.warn("Warning: Could not delete original file from storage:", deleteError);
-                  } else {
-                    console.log(`Successfully deleted original file: ${sourcePath}`);
-                  }
-                } catch (deleteErr) {
-                  console.warn("Exception deleting original file:", deleteErr);
-                }
-                
-                break; // Exit the loop if copy was successful
-              } else {
-                console.warn(`Failed to copy from ${sourcePath}:`, copyError);
-              }
-            } catch (err) {
-              console.warn(`Exception copying from ${sourcePath}:`, err);
-            }
-          }
-          
-          if (!copySuccessful) {
-            console.warn("Could not copy file to new location. The file may need to be re-uploaded.");
-          }
-        } catch (storageErr) {
-          console.error("Exception during storage operations:", storageErr);
-          // Don't throw, just log the error
-        }
-      }
-      
       // Return updated file data
       return {
         ...fileData,
-        name: newName,
-        file_name: newName,
-        file_path: updatedData.file_path,
-        normalized_path: updatedData.normalized_path
+        name: newName, // Update the name property for UI
+        metadata: updatedMetadata,
+        // Keep original file_name and file_path unchanged
+        file_name: fileData.file_name,
+        file_path: fileData.file_path,
+        normalized_path: fileData.normalized_path
       };
     } catch (error) {
       console.error("Error during file rename process:", error);

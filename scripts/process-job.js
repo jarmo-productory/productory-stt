@@ -33,6 +33,71 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 // This is a simplified version of the ElevenLabsAPI class in lib/elevenlabs.ts
 const { ElevenLabsClient } = require('elevenlabs');
 
+// Add logging utility at the top after the imports
+const LOG_LEVELS = {
+  DEBUG: 0,
+  INFO: 1,
+  WARN: 2,
+  ERROR: 3
+};
+
+class Logger {
+  constructor(context = {}) {
+    this.context = context;
+    this.logLevel = process.env.LOG_LEVEL ? LOG_LEVELS[process.env.LOG_LEVEL.toUpperCase()] : LOG_LEVELS.INFO;
+  }
+
+  formatMessage(level, message, extra = {}) {
+    const timestamp = new Date().toISOString();
+    return JSON.stringify({
+      timestamp,
+      level,
+      message,
+      ...this.context,
+      ...extra
+    });
+  }
+
+  debug(message, extra = {}) {
+    if (this.logLevel <= LOG_LEVELS.DEBUG) {
+      console.debug(this.formatMessage('DEBUG', message, extra));
+    }
+  }
+
+  info(message, extra = {}) {
+    if (this.logLevel <= LOG_LEVELS.INFO) {
+      console.log(this.formatMessage('INFO', message, extra));
+    }
+  }
+
+  warn(message, extra = {}) {
+    if (this.logLevel <= LOG_LEVELS.WARN) {
+      console.warn(this.formatMessage('WARN', message, extra));
+    }
+  }
+
+  error(message, error, extra = {}) {
+    if (this.logLevel <= LOG_LEVELS.ERROR) {
+      console.error(this.formatMessage('ERROR', message, {
+        error: {
+          message: error.message,
+          stack: error.stack,
+          code: error.code,
+          ...error
+        },
+        ...extra
+      }));
+    }
+  }
+
+  child(additionalContext = {}) {
+    return new Logger({ ...this.context, ...additionalContext });
+  }
+}
+
+// Create base logger
+const logger = new Logger();
+
 class ElevenLabsAPI {
   constructor(apiKey, maxRetries = 3, retryDelay = 1000) {
     this.client = new ElevenLabsClient({ apiKey });
@@ -123,8 +188,10 @@ class ElevenLabsAPI {
 const elevenLabsClient = new ElevenLabsAPI(ELEVENLABS_API_KEY, 3, 2000);
 
 async function processJob() {
+  const baseLogger = logger.child({ component: 'job-processor' });
+  
   try {
-    console.log('Fetching pending transcription job...');
+    baseLogger.info('Fetching pending transcription job');
     
     // Get the pending job
     const { data: jobs, error: jobsError } = await supabase
@@ -136,17 +203,27 @@ async function processJob() {
       .limit(1);
     
     if (jobsError) {
-      console.error('Error fetching jobs:', jobsError);
+      baseLogger.error('Failed to fetch jobs', jobsError);
       return;
     }
     
     if (!jobs || jobs.length === 0) {
-      console.log('No pending transcription jobs found');
+      baseLogger.debug('No pending transcription jobs found');
       return;
     }
     
     const job = jobs[0];
-    console.log(`Processing job ${job.id} for transcription ${job.payload.transcription_id}`);
+    const jobLogger = baseLogger.child({ 
+      job_id: job.id, 
+      transcription_id: job.payload.transcription_id,
+      file_id: job.payload.file_id 
+    });
+    
+    jobLogger.info('Starting job processing', {
+      job_type: job.job_type,
+      attempts: job.attempts,
+      created_at: job.created_at
+    });
     
     // Update job status to processing
     const { error: updateError } = await supabase
@@ -159,9 +236,11 @@ async function processJob() {
       .eq('id', job.id);
     
     if (updateError) {
-      console.error('Error updating job status:', updateError);
+      jobLogger.error('Failed to update job status', updateError);
       return;
     }
+    
+    jobLogger.debug('Updated job status to processing');
     
     // Update transcription status to processing
     const { error: transcriptionUpdateError } = await supabase
@@ -170,7 +249,7 @@ async function processJob() {
       .eq('id', job.payload.transcription_id);
     
     if (transcriptionUpdateError) {
-      console.error('Error updating transcription status:', transcriptionUpdateError);
+      jobLogger.error('Failed to update transcription status', transcriptionUpdateError);
       
       // Mark job as failed
       await supabase
@@ -186,7 +265,7 @@ async function processJob() {
     }
     
     // Get the audio file information
-    console.log(`Fetching audio file information for file ID: ${job.payload.file_id}`);
+    jobLogger.debug('Fetching audio file information');
     const { data: fileData, error: fileError } = await supabase
       .from('audio_files')
       .select('*')
@@ -195,7 +274,9 @@ async function processJob() {
     
     if (fileError || !fileData) {
       const errorMessage = `Failed to fetch audio file information: ${fileError?.message || 'File not found'}`;
-      console.error(errorMessage);
+      jobLogger.error('Audio file fetch failed', fileError || new Error('File not found'), {
+        file_id: job.payload.file_id
+      });
       
       // Mark job as failed
       await supabase
@@ -219,7 +300,12 @@ async function processJob() {
     }
     
     // Download the audio file from Supabase storage
-    console.log(`Downloading audio file: ${fileData.file_path}`);
+    jobLogger.info('Downloading audio file', { 
+      file_path: fileData.file_path,
+      file_size: fileData.size,
+      file_format: fileData.format
+    });
+    
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'transcription-'));
     const tempFilePath = path.join(tempDir, path.basename(fileData.file_path));
     
@@ -243,7 +329,10 @@ async function processJob() {
       
       // If the first attempt fails, try alternative path formats
       if (downloadError || !fileContent) {
-        console.log(`First download attempt failed: ${downloadError?.message || 'Unknown error'}`);
+        jobLogger.warn('First download attempt failed, trying alternative path', { 
+          original_path: storagePath,
+          error: downloadError?.message 
+        });
         console.log('Trying alternative path format...');
         
         // Try just the filename
@@ -281,7 +370,10 @@ async function processJob() {
       console.log(`Audio file saved to temporary location: ${tempFilePath}`);
       
       // Call ElevenLabs API for transcription
-      console.log('Calling ElevenLabs API for transcription...');
+      jobLogger.info('Starting transcription', { 
+        options: transcriptionOptions,
+        temp_file_path: tempFilePath
+      });
       
       // Prepare transcription options
       const transcriptionOptions = {
@@ -295,10 +387,12 @@ async function processJob() {
       // Call the API
       const transcriptionResult = await elevenLabsClient.transcribeFile(tempFilePath, transcriptionOptions);
       
-      console.log('Transcription completed successfully');
-      console.log(`Language: ${transcriptionResult.language_code} (probability: ${transcriptionResult.language_probability})`);
-      console.log(`Text length: ${transcriptionResult.text.length} characters`);
-      console.log(`Words: ${transcriptionResult.words.length}`);
+      jobLogger.info('Transcription completed', {
+        language: transcriptionResult.language_code,
+        language_probability: transcriptionResult.language_probability,
+        text_length: transcriptionResult.text.length,
+        word_count: transcriptionResult.words.length
+      });
       
       // Process the transcription result
       // Extract segments from words
@@ -380,7 +474,11 @@ async function processJob() {
           (transcriptionResult.words[transcriptionResult.words.length - 1].end || 0) : 0);
       
       // Store transcription segments
-      console.log(`Storing ${segments.length} transcription segments...`);
+      jobLogger.info('Storing transcription segments', { 
+        segment_count: segments.length,
+        total_duration: duration,
+        word_count: wordCount
+      });
       
       // Insert segments
       const { error: segmentsError } = await supabase
@@ -442,7 +540,11 @@ async function processJob() {
       }
       
       // Mark job as completed
-      console.log('Marking job as completed...');
+      jobLogger.info('Job completed successfully', {
+        duration,
+        word_count: wordCount,
+        segment_count: segments.length
+      });
       
       const { error: jobCompleteError } = await supabase
         .from('job_queue')
@@ -468,8 +570,57 @@ async function processJob() {
       console.log(`Transcription ${job.payload.transcription_id} is now complete.`);
       
     } catch (error) {
-      console.error('Error processing transcription:', error);
+      baseLogger.error('Fatal error in job processing', error, {
+        job_id: job?.id,
+        transcription_id: job?.payload?.transcription_id
+      });
       
+      if (job) {
+        // Mark job and transcription as failed
+        await supabase
+          .from('job_queue')
+          .update({ 
+            status: 'failed', 
+            completed_at: new Date().toISOString(),
+            error_message: error.message || 'Unknown error during transcription'
+          })
+          .eq('id', job.id);
+        
+        await supabase
+          .from('transcriptions')
+          .update({ 
+            status: 'failed',
+            error_message: error.message || 'Unknown error during transcription'
+          })
+          .eq('id', job.payload.transcription_id);
+      }
+    } finally {
+      // Clean up temporary files
+      if (tempFilePath && tempDir) {
+        try {
+          if (fs.existsSync(tempFilePath)) {
+            fs.unlinkSync(tempFilePath);
+            baseLogger.debug('Cleaned up temporary file', { path: tempFilePath });
+          }
+          fs.rmdirSync(tempDir);
+          baseLogger.debug('Cleaned up temporary directory', { path: tempDir });
+        } catch (cleanupError) {
+          baseLogger.warn('Failed to clean up temporary files', { 
+            error: cleanupError.message,
+            temp_file: tempFilePath,
+            temp_dir: tempDir
+          });
+        }
+      }
+    }
+    
+  } catch (error) {
+    baseLogger.error('Fatal error in job processing', error, {
+      job_id: job?.id,
+      transcription_id: job?.payload?.transcription_id
+    });
+    
+    if (job) {
       // Mark job and transcription as failed
       await supabase
         .from('job_queue')
@@ -487,20 +638,7 @@ async function processJob() {
           error_message: error.message || 'Unknown error during transcription'
         })
         .eq('id', job.payload.transcription_id);
-    } finally {
-      // Clean up temporary files
-      try {
-        if (fs.existsSync(tempFilePath)) {
-          fs.unlinkSync(tempFilePath);
-        }
-        fs.rmdirSync(tempDir);
-      } catch (cleanupError) {
-        console.warn('Error cleaning up temporary files:', cleanupError);
-      }
     }
-    
-  } catch (error) {
-    console.error('Error processing job:', error);
   }
 }
 

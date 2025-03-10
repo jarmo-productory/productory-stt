@@ -6,11 +6,10 @@ import {
   Clock, 
   Calendar,
   HardDrive,
-  Trash2,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
+import { FileActionsMenu } from './FileActionsMenu';
 
 // Helper function to format file size
 const formatFileSize = (bytes: number): string => {
@@ -31,13 +30,11 @@ const formatDuration = (seconds?: number): string => {
 
 interface FileListProps {
   files: FileObject[];
-  onDeleteFile?: (file: FileObject) => void;
   folderId?: string | null;
 }
 
 export function FileList({
   files = [],
-  onDeleteFile,
   folderId = null,
 }: FileListProps) {
   const router = useRouter();
@@ -86,7 +83,9 @@ export function FileList({
               {/* File name */}
               <div className="col-span-6 lg:col-span-5 flex items-center gap-2 truncate">
                 <FileAudio className="h-4 w-4 text-muted-foreground" />
-                <span className="truncate font-medium">{file.name || file.file_name || "Unnamed File"}</span>
+                <span className="truncate font-medium">
+                  {file.metadata?.display_name || file.name || file.file_name || "Unnamed File"}
+                </span>
               </div>
               
               {/* Duration */}
@@ -110,20 +109,11 @@ export function FileList({
               </div>
               
               {/* Actions */}
-              <div className="col-span-2 md:col-span-1 flex justify-end">
-                {onDeleteFile && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                    onClick={(e) => {
-                      e.stopPropagation(); // Prevent file click when deleting
-                      onDeleteFile(file);
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                )}
+              <div 
+                className="col-span-2 md:col-span-1 flex justify-end"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <FileActionsMenu file={file} />
               </div>
             </div>
           ))}

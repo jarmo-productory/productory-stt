@@ -16,6 +16,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useFileActions } from '@/app/components/files/FileActionsProvider';
 
 interface ClientFolderPageProps {
   folderId: string;
@@ -28,12 +29,11 @@ export default function ClientFolderPage({ folderId }: ClientFolderPageProps) {
   const [showUpload, setShowUpload] = useState(false);
   const [isCreateSubfolderModalOpen, setIsCreateSubfolderModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [isFileDeleteModalOpen, setIsFileDeleteModalOpen] = useState(false);
-  const [fileToDelete, setFileToDelete] = useState<FileObject | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
-  const { files, isLoading, error, refreshFiles, deleteFile } = useFiles();
+  const { files, isLoading, error, refreshFiles } = useFiles();
+  const { setSelectedFile } = useFileActions();
 
   // Fetch the actual folder name
   useEffect(() => {
@@ -69,17 +69,6 @@ export default function ClientFolderPage({ folderId }: ClientFolderPageProps) {
 
   const handleDeleteSuccess = () => {
     router.push('/folders');
-  };
-
-  const handleDeleteFile = (file: FileObject) => {
-    setFileToDelete(file);
-    setIsFileDeleteModalOpen(true);
-  };
-
-  const handleFileDeleteSuccess = () => {
-    refreshFiles();
-    setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 1000);
   };
 
   const startEditing = () => {
@@ -205,7 +194,6 @@ export default function ClientFolderPage({ folderId }: ClientFolderPageProps) {
         ) : (
           <FileList
             files={files}
-            onDeleteFile={handleDeleteFile}
             folderId={folderId}
           />
         )}
@@ -223,14 +211,6 @@ export default function ClientFolderPage({ folderId }: ClientFolderPageProps) {
           onClose={() => setIsDeleteModalOpen(false)}
           folder={{ id: folderId, name: folderName }}
           onSuccess={handleDeleteSuccess}
-        />
-
-        {/* Delete File Modal */}
-        <FileDeleteModal
-          isOpen={isFileDeleteModalOpen}
-          onOpenChange={setIsFileDeleteModalOpen}
-          file={fileToDelete}
-          onSuccess={handleFileDeleteSuccess}
         />
       </div>
     </AppLayout>

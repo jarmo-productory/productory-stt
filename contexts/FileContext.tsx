@@ -131,7 +131,7 @@ export function FileProvider({ children }: { children: ReactNode }) {
       // Map the database fields to our FileObject interface
       const mappedFiles = data?.map((file: any) => ({
         id: file.id,
-        name: file.file_name || 'Unnamed File', // Use file_name as name
+        name: file.metadata?.display_name || file.file_name || 'Unnamed File', // Prioritize display_name from metadata
         storage_name: file.file_path, // Use file_path as storage_name
         size: file.size || 0,
         created_at: file.created_at,

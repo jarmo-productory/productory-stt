@@ -173,12 +173,14 @@ export function OverviewColumn({ file }: OverviewColumnProps) {
   
   // Extract file extension
   const getFileExtension = (filename: string) => {
+    if (!filename) return '';
     const lastDotIndex = filename.lastIndexOf('.');
     if (lastDotIndex === -1) return '';
     return filename.substring(lastDotIndex);
   };
   
-  const fileName = file.name || file.file_name || 'Unnamed file';
+  // Ensure we're using the most up-to-date display name
+  const fileName = file?.metadata?.display_name || file?.name || file?.file_name || 'Unnamed file';
   const extension = getFileExtension(fileName);
   
   return (

@@ -5,34 +5,14 @@ import { useRouter } from 'next/navigation';
 import { AppLayout } from "@/app/components/layout/AppLayout";
 import { Breadcrumbs } from "@/app/components/layout/Breadcrumbs";
 import { PageHeader } from "@/app/components/layout/PageHeader";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { 
-  ChevronLeft, 
-  MoreHorizontal, 
-  Pencil, 
-  Trash2, 
-  Check, 
-  X, 
-  Download,
-  FileAudio
-} from "lucide-react";
-import Link from "next/link";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { FileAudio } from "lucide-react";
 import { OverviewColumn } from './components/OverviewColumn';
 import { TranscriptionColumn } from './components/TranscriptionColumn';
 import { FileObject } from "@/contexts/FileContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { FileService } from "@/app/components/files";
+import { FileService } from "@/app/components/files/FileService";
+import { useFileActions } from "@/app/components/files/FileActionsProvider";
+import { FileActionsMenu } from "@/app/components/files/FileActionsMenu";
 
 interface ClientFileDetailsPageProps {
   fileId: string;
@@ -42,12 +22,31 @@ export default function ClientFileDetailsPage({ fileId }: ClientFileDetailsPageP
   const [fileName, setFileName] = useState("Loading...");
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState("");
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [folderName, setFolderName] = useState("");
   const [folderId, setFolderId] = useState<string | null>(null);
   const [fileData, setFileData] = useState<FileObject | null>(null);
   const router = useRouter();
   const { user } = useAuth();
+  const { handleRenameFile, setSelectedFile, setOnFileUpdated } = useFileActions();
+  
+  // Function to update file data when it changes
+  const handleFileUpdate = (updatedFile: FileObject | undefined) => {
+    if (!updatedFile) return; // Guard against undefined values
+    
+    setFileName(updatedFile.metadata?.display_name || updatedFile.name || updatedFile.file_name || 'Unnamed File');
+    setEditedName(updatedFile.metadata?.display_name || updatedFile.name || updatedFile.file_name || '');
+    setFileData(updatedFile);
+  };
+  
+  // Register the callback when component mounts
+  useEffect(() => {
+    setOnFileUpdated(handleFileUpdate);
+    
+    // Clean up when component unmounts
+    return () => {
+      setOnFileUpdated(undefined);
+    };
+  }, [setOnFileUpdated]);
   
   // Fetch the file details
   useEffect(() => {
@@ -66,38 +65,30 @@ export default function ClientFileDetailsPage({ fileId }: ClientFileDetailsPageP
           return;
         }
         
+        // Use the name which should already prioritize metadata.display_name from FileService
         setFileName(fileData.name);
         setEditedName(fileData.name);
         setFileData(fileData);
         setFolderName(folderName);
         setFolderId(folderId);
+        setSelectedFile(fileData);
       } else {
         setFileName("Unnamed File");
       }
     };
     
     loadFileDetails();
-  }, [fileId, router]);
+  }, [fileId, router, setSelectedFile]);
   
   // Handle file rename
   const handleRename = async () => {
     if (isEditing && user && fileData) {
-      const updatedFileData = await FileService.renameFile(
-        fileId,
-        fileData,
-        editedName,
-        user.id
-      );
-      
-      if (updatedFileData) {
-        setFileName(updatedFileData.name);
-        setFileData(updatedFileData);
-      } else {
-        // Revert to original name on error
-        setEditedName(fileName);
+      const updatedFile = await handleRenameFile(editedName);
+      if (updatedFile) {
+        // File update will be handled by the callback
+        // No need to manually update state here
       }
     }
-    
     setIsEditing(!isEditing);
   };
   
@@ -109,27 +100,6 @@ export default function ClientFileDetailsPage({ fileId }: ClientFileDetailsPageP
   const cancelEditing = () => {
     setIsEditing(false);
     setEditedName(fileName);
-  };
-  
-  // Handle file delete
-  const handleDelete = async () => {
-    const success = await FileService.deleteFile(fileId);
-    
-    if (success) {
-      // Navigate back to the folder or dashboard
-      if (folderId) {
-        router.push(`/folders/${folderId}`);
-      } else {
-        router.push('/dashboard');
-      }
-    }
-    
-    setIsDeleteDialogOpen(false);
-  };
-  
-  // Handle export
-  const handleExport = () => {
-    FileService.exportFile(fileId);
   };
   
   return (
@@ -154,46 +124,14 @@ export default function ClientFileDetailsPage({ fileId }: ClientFileDetailsPageP
         onSave={handleRename}
         onCancel={cancelEditing}
         type="file"
-        menuItems={[
-          {
-            label: 'Rename',
-            icon: <Pencil className="h-4 w-4 mr-2" />,
-            onClick: startEditing
-          },
-          {
-            label: 'Delete',
-            icon: <Trash2 className="h-4 w-4 mr-2" />,
-            onClick: () => setIsDeleteDialogOpen(true)
-          },
-          {
-            label: 'Export',
-            icon: <Download className="h-4 w-4 mr-2" />,
-            onClick: handleExport
-          }
-        ]}
+        actions={fileData && <FileActionsMenu file={fileData} onStartRename={startEditing} />}
       />
       
       {/* Two-column layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
         <OverviewColumn file={fileData} />
-        <TranscriptionColumn file={fileData} />
+        <TranscriptionColumn file={fileData as any} />
       </div>
-      
-      {/* Delete confirmation dialog */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will delete the file "{fileName}". This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </AppLayout>
   );
 } 

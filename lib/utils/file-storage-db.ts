@@ -5,6 +5,17 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { storagePathUtil } from './storage';
 
 /**
+ * Interface for transcription format information
+ */
+export interface TranscriptionFormat {
+  path: string;
+  format: string;
+  sample_rate: number;
+  channels: number;
+  created_at: string;
+}
+
+/**
  * Interface for audio file database record with enhanced schema
  */
 export interface AudioFile {
@@ -23,6 +34,9 @@ export interface AudioFile {
   created_at?: string;
   updated_at?: string;
   folder_id?: string | null;
+  transcription_formats?: {
+    optimized?: TranscriptionFormat;
+  };
 }
 
 /**
@@ -325,4 +339,93 @@ export async function searchAudioFiles(
     console.error('Error searching audio files:', error);
     return [];
   }
+}
+
+/**
+ * Add or update a transcription format for an audio file
+ * @param supabase Supabase client
+ * @param fileId ID of the audio file
+ * @param formatInfo Information about the transcription format
+ * @returns The updated audio file or null if an error occurred
+ */
+export async function addTranscriptionFormat(
+  supabase: SupabaseClient,
+  fileId: string,
+  formatInfo: Omit<TranscriptionFormat, 'created_at'>
+): Promise<AudioFile | null> {
+  try {
+    // Get the current audio file to access existing transcription formats
+    const { data: existingFile, error: fetchError } = await supabase
+      .from('audio_files')
+      .select('transcription_formats')
+      .eq('id', fileId)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching audio file:', fetchError);
+      return null;
+    }
+
+    // Create a new transcription format object with the current timestamp
+    const newFormat: TranscriptionFormat = {
+      ...formatInfo,
+      created_at: new Date().toISOString()
+    };
+
+    // Create or update the transcription_formats object
+    const updatedFormats = {
+      ...(existingFile?.transcription_formats || {}),
+      optimized: newFormat
+    };
+
+    // Update the audio file with the new transcription formats
+    const { data, error } = await supabase
+      .from('audio_files')
+      .update({ transcription_formats: updatedFormats })
+      .eq('id', fileId)
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error('Error updating transcription format:', error);
+      return null;
+    }
+
+    return data as AudioFile;
+  } catch (error) {
+    console.error('Error adding transcription format:', error);
+    return null;
+  }
+}
+
+/**
+ * Get the transcription format path if available
+ * @param audioFile The audio file record
+ * @returns The path to the transcription format or the original file path if not available
+ */
+export function getTranscriptionFormatPath(
+  audioFile: AudioFile
+): string {
+  // If optimized format is available, use it
+  if (audioFile.transcription_formats?.optimized) {
+    return audioFile.transcription_formats.optimized.path;
+  }
+
+  // If no transcription format is available, use the original
+  return audioFile.file_path;
+}
+
+/**
+ * Check if the optimized transcription format is available for an audio file
+ * @param audioFile The audio file record
+ * @returns Whether the optimized transcription format is available
+ */
+export function isTranscriptionFormatAvailable(
+  audioFile: AudioFile
+): boolean {
+  return (
+    audioFile.transcription_formats !== undefined && 
+    audioFile.transcription_formats !== null &&
+    audioFile.transcription_formats.optimized !== undefined
+  );
 } 

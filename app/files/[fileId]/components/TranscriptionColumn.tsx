@@ -1,24 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { FileObject } from "@/contexts/FileContext";
-import { 
-  FileText,
-  FileJson,
-  Download
-} from 'lucide-react';
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { TranscriptionRequest, TranscriptionView } from "@/app/components/files";
-import { storagePathUtil } from "@/lib/utils/storage";
+import { useEffect, useState } from 'react';
+import { FileText } from 'lucide-react';
 import { useAuth } from "@/contexts/AuthContext";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { TranscriptionRequest, TranscriptionView } from "@/app/components/files";
+
+// Define FileObject interface locally if it's not available from a module
+interface FileObject {
+  id: string;
+  file_name: string;
+  file_path: string;
+  normalized_path?: string;
+  user_id: string;
+  [key: string]: any;
+}
 
 interface TranscriptionColumnProps {
   file: FileObject | null;
@@ -26,38 +22,107 @@ interface TranscriptionColumnProps {
 
 export function TranscriptionColumn({ file }: TranscriptionColumnProps) {
   const [transcriptionId, setTranscriptionId] = useState<string | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [transcriptionFormats, setTranscriptionFormats] = useState<any>(null);
   const { user } = useAuth();
   const supabase = createClientComponentClient();
   
-  // Check for existing transcription
+  // Fetch transcription formats when file is available
   useEffect(() => {
-    async function checkExistingTranscription() {
+    async function fetchTranscriptionFormats() {
       if (!file) return;
       
       try {
         const { data, error } = await supabase
+          .from('audio_files')
+          .select('transcription_formats')
+          .eq('id', file.id)
+          .single();
+        
+        if (error) {
+          console.error('Error fetching transcription formats:', error);
+          return;
+        }
+        
+        if (data && data.transcription_formats) {
+          console.log('Fetched transcription formats:', data.transcription_formats);
+          setTranscriptionFormats(data.transcription_formats);
+        }
+      } catch (error) {
+        console.error('Error in fetchTranscriptionFormats:', error);
+      }
+    }
+    
+    fetchTranscriptionFormats();
+  }, [file, supabase]);
+  
+  // Check for existing transcription
+  useEffect(() => {
+    async function checkExistingTranscription() {
+      if (!file) {
+        setIsLoading(false);
+        return;
+      }
+      
+      try {
+        const { data, error } = await supabase
           .from('transcriptions')
-          .select('id')
+          .select('id, status')
           .eq('file_id', file.id)
           .order('created_at', { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
         
-        if (data && !error) {
+        if (error) {
+          console.error('Error checking for existing transcription:', error);
+          setIsLoading(false);
+          return;
+        }
+        
+        if (data) {
+          console.log('Found existing transcription:', data);
           setTranscriptionId(data.id);
         }
+        
+        setIsLoading(false);
       } catch (error) {
-        console.log('No existing transcription found');
-      } finally {
+        console.error('Error in checkExistingTranscription:', error);
         setIsLoading(false);
       }
     }
     
     checkExistingTranscription();
   }, [file, supabase]);
+  
+  // Get audio file details including transcription formats
+  useEffect(() => {
+    async function getAudioFileDetails() {
+      if (!file || !user) return;
+      
+      try {
+        console.log('Getting audio file details for file:', file.id);
+        
+        // Get the file details including transcription_formats
+        const { data: fileData, error: fileError } = await supabase
+          .from('audio_files')
+          .select('transcription_formats')
+          .eq('id', file.id)
+          .single();
+        
+        if (fileError) {
+          console.error('Error fetching file details:', fileError);
+        } else if (fileData) {
+          console.log('File details fetched:', fileData);
+          setTranscriptionFormats(fileData.transcription_formats);
+        }
+      } catch (error) {
+        console.error('Error in getAudioFileDetails:', error);
+      }
+    }
+    
+    getAudioFileDetails();
+  }, [file, user, supabase]);
   
   // Get audio URL from file
   useEffect(() => {
@@ -88,63 +153,34 @@ export function TranscriptionColumn({ file }: TranscriptionColumnProps) {
         const filePath = file.file_path;
         
         if (!filePath) {
-          console.error('File path is missing');
+          console.error('No file path available');
           return;
         }
         
-        // Try multiple path variations to find the correct one
-        const pathVariations = [];
+        console.log('Using file_path:', filePath);
+        const { data, error } = await supabase
+          .storage
+          .from('audio-files')
+          .createSignedUrl(filePath, 3600);
         
-        // 1. Use the file_path directly if it includes the prefix
-        if (filePath.startsWith('audio/')) {
-          pathVariations.push(filePath);
+        if (error) {
+          console.error('Error creating signed URL:', error);
+          return;
         }
         
-        // 2. Construct the path using StoragePathUtil
-        const constructedPath = storagePathUtil.getAudioPath(user.id, filePath);
-        pathVariations.push(constructedPath);
-        
-        // 3. Try with just the filename (in case it's stored at the root)
-        const fileName = filePath.split('/').pop() || filePath;
-        pathVariations.push(fileName);
-        
-        // 4. Try with just the user ID prefix
-        pathVariations.push(`audio/${user.id}/${fileName}`);
-        
-        console.log('Trying path variations:', pathVariations);
-        
-        // Try each path variation until one works
-        for (const path of pathVariations) {
-          try {
-            console.log('Trying path:', path);
-            const { data, error } = await supabase
-              .storage
-              .from('audio-files')
-              .createSignedUrl(path, 3600);
-            
-            if (!error && data) {
-              setAudioUrl(data.signedUrl);
-              console.log('Audio URL created successfully with path:', path);
-              return;
-            }
-          } catch (e) {
-            console.warn(`Failed with path ${path}:`, e);
-          }
-        }
-        
-        console.error('All path variations failed to create a signed URL');
+        setAudioUrl(data.signedUrl);
+        console.log('Audio URL created using file_path');
       } catch (error) {
-        console.error('Error creating signed URL:', error);
+        console.error('Error in getAudioUrl:', error);
       }
     }
     
     getAudioUrl();
   }, [file, user, supabase]);
   
-  // Handle transcription creation
-  const handleTranscriptionCreated = (newTranscriptionId: string, newJobId: string) => {
+  const handleTranscriptionCreated = (newTranscriptionId: string) => {
+    console.log('Transcription created:', newTranscriptionId);
     setTranscriptionId(newTranscriptionId);
-    setJobId(newJobId);
   };
   
   return (
@@ -163,7 +199,7 @@ export function TranscriptionColumn({ file }: TranscriptionColumnProps) {
           transcriptionId={transcriptionId} 
           audioUrl={audioUrl || undefined}
           className="w-full"
-          jobId={jobId || undefined}
+          transcriptionFormats={transcriptionFormats}
         />
       ) : (
         <TranscriptionRequest 

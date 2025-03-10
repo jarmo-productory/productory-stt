@@ -77,7 +77,6 @@ export default function FoldersPage() {
             <h2 className="text-xl font-semibold mb-4">Root Files</h2>
             <FileList
               files={files}
-              onDeleteFile={deleteFile}
             />
           </div>
         </div>

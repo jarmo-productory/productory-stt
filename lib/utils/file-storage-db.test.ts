@@ -9,7 +9,10 @@ import {
   deleteAudioFile, 
   listAudioFiles, 
   searchAudioFiles,
-  type AudioFile
+  type AudioFile,
+  addTranscriptionFormat,
+  getBestTranscriptionFormat,
+  getAvailableTranscriptionFormats
 } from './file-storage-db';
 import { storagePathUtil } from './storage';
 import { SupabaseClient } from '@supabase/supabase-js';
@@ -427,6 +430,227 @@ describe('file-storage-db', () => {
 
       // Verify
       expect(result).toEqual([]);
+    });
+  });
+
+  // Add tests for transcription format functions
+  describe('Transcription Format Functions', () => {
+    // Test for addTranscriptionFormat
+    describe('addTranscriptionFormat', () => {
+      it('should add a new transcription format to an audio file', async () => {
+        // Mock existing file with no transcription formats
+        mockSupabase.from.mockReturnValue({
+          select: mockSupabase.select,
+          eq: mockSupabase.eq,
+          single: mockSupabase.single,
+        });
+        mockSupabase.select.mockReturnValue({
+          eq: mockSupabase.eq,
+        });
+        mockSupabase.eq.mockReturnValue({
+          single: mockSupabase.single,
+        });
+        mockSupabase.single.mockResolvedValueOnce({
+          data: { transcription_formats: {} },
+          error: null,
+        });
+
+        // Mock update operation
+        mockSupabase.from.mockReturnValue({
+          update: mockSupabase.update,
+        });
+        mockSupabase.update.mockReturnValue({
+          eq: mockSupabase.eq,
+        });
+        mockSupabase.eq.mockReturnValue({
+          select: mockSupabase.select,
+        });
+        mockSupabase.select.mockReturnValue({
+          single: mockSupabase.single,
+        });
+        mockSupabase.single.mockResolvedValueOnce({
+          data: {
+            id: mockFileId,
+            transcription_formats: {
+              whisper: {
+                path: 'audio/user-id/transcription/file.wav',
+                format: 'wav',
+                sample_rate: 16000,
+                channels: 1,
+                created_at: '2023-06-15T14:30:00Z',
+              },
+            },
+          },
+          error: null,
+        });
+
+        // Call the function
+        const formatInfo = {
+          path: 'audio/user-id/transcription/file.wav',
+          format: 'wav',
+          sample_rate: 16000,
+          channels: 1,
+        };
+        
+        const result = await addTranscriptionFormat(
+          mockSupabase as unknown as SupabaseClient,
+          mockFileId,
+          'whisper',
+          formatInfo
+        );
+
+        // Verify the result
+        expect(result).not.toBeNull();
+        expect(result?.transcription_formats?.whisper).toBeDefined();
+        expect(result?.transcription_formats?.whisper.format).toBe('wav');
+        expect(result?.transcription_formats?.whisper.sample_rate).toBe(16000);
+      });
+
+      it('should handle errors when fetching the audio file', async () => {
+        // Mock error when fetching file
+        mockSupabase.from.mockReturnValue({
+          select: mockSupabase.select,
+          eq: mockSupabase.eq,
+          single: mockSupabase.single,
+        });
+        mockSupabase.select.mockReturnValue({
+          eq: mockSupabase.eq,
+        });
+        mockSupabase.eq.mockReturnValue({
+          single: mockSupabase.single,
+        });
+        mockSupabase.single.mockResolvedValueOnce({
+          data: null,
+          error: new Error('File not found'),
+        });
+
+        // Call the function
+        const formatInfo = {
+          path: 'audio/user-id/transcription/file.wav',
+          format: 'wav',
+          sample_rate: 16000,
+          channels: 1,
+        };
+        
+        const result = await addTranscriptionFormat(
+          mockSupabase as unknown as SupabaseClient,
+          mockFileId,
+          'whisper',
+          formatInfo
+        );
+
+        // Verify the result
+        expect(result).toBeNull();
+      });
+    });
+
+    // Test for getBestTranscriptionFormat
+    describe('getBestTranscriptionFormat', () => {
+      it('should return the preferred service format if available', () => {
+        const audioFile: AudioFile = {
+          id: mockFileId,
+          user_id: mockUserId,
+          file_name: 'test.mp3',
+          file_path: 'original/path/test.mp3',
+          transcription_formats: {
+            whisper: {
+              path: 'audio/user-id/transcription/whisper.wav',
+              format: 'wav',
+              sample_rate: 16000,
+              channels: 1,
+              created_at: '2023-06-15T14:30:00Z',
+            },
+            google: {
+              path: 'audio/user-id/transcription/google.flac',
+              format: 'flac',
+              sample_rate: 44100,
+              channels: 2,
+              created_at: '2023-06-15T14:35:00Z',
+            },
+          },
+        };
+
+        const result = getBestTranscriptionFormat(audioFile, 'google');
+        expect(result).toBe('audio/user-id/transcription/google.flac');
+      });
+
+      it('should return the whisper format if preferred service is not available', () => {
+        const audioFile: AudioFile = {
+          id: mockFileId,
+          user_id: mockUserId,
+          file_name: 'test.mp3',
+          file_path: 'original/path/test.mp3',
+          transcription_formats: {
+            whisper: {
+              path: 'audio/user-id/transcription/whisper.wav',
+              format: 'wav',
+              sample_rate: 16000,
+              channels: 1,
+              created_at: '2023-06-15T14:30:00Z',
+            },
+          },
+        };
+
+        const result = getBestTranscriptionFormat(audioFile, 'google');
+        expect(result).toBe('audio/user-id/transcription/whisper.wav');
+      });
+
+      it('should return the original file path if no transcription formats are available', () => {
+        const audioFile: AudioFile = {
+          id: mockFileId,
+          user_id: mockUserId,
+          file_name: 'test.mp3',
+          file_path: 'original/path/test.mp3',
+        };
+
+        const result = getBestTranscriptionFormat(audioFile);
+        expect(result).toBe('original/path/test.mp3');
+      });
+    });
+
+    // Test for getAvailableTranscriptionFormats
+    describe('getAvailableTranscriptionFormats', () => {
+      it('should return all available transcription formats', () => {
+        const audioFile: AudioFile = {
+          id: mockFileId,
+          user_id: mockUserId,
+          file_name: 'test.mp3',
+          file_path: 'original/path/test.mp3',
+          transcription_formats: {
+            whisper: {
+              path: 'audio/user-id/transcription/whisper.wav',
+              format: 'wav',
+              sample_rate: 16000,
+              channels: 1,
+              created_at: '2023-06-15T14:30:00Z',
+            },
+            google: {
+              path: 'audio/user-id/transcription/google.flac',
+              format: 'flac',
+              sample_rate: 44100,
+              channels: 2,
+              created_at: '2023-06-15T14:35:00Z',
+            },
+          },
+        };
+
+        const result = getAvailableTranscriptionFormats(audioFile);
+        expect(result).toHaveLength(2);
+        expect(result[0].service).toBe('whisper');
+        expect(result[1].service).toBe('google');
+      });
+
+      it('should return an empty array if no transcription formats are available', () => {
+        const audioFile: AudioFile = {
+          id: mockFileId,
+          user_id: mockUserId,
+          file_name: 'test.mp3',
+          file_path: 'original/path/test.mp3',
+        };
+
+        const result = getAvailableTranscriptionFormats(audioFile);
+        expect(result).toHaveLength(0);
+      });
     });
   });
 }); 

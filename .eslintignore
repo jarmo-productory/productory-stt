@@ -1,0 +1,39 @@
+# Build artifacts
+.next/
+out/
+dist/
+build/
+
+# Dependencies
+node_modules/
+
+# Cache
+.cache/
+.eslintcache
+
+# Public assets
+public/
+
+# Documentation
+.docs/
+
+# Generated files
+*.generated.*
+*.d.ts
+
+# Config files
+next.config.js
+postcss.config.js
+tailwind.config.js
+
+# Test files
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+**/__tests__/
+**/__mocks__/
+
+# Temporary files
+.tmp/
+.temp/

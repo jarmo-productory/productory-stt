@@ -7,6 +7,10 @@ import os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import FormData from 'form-data';
+import { ElevenLabsClient } from 'elevenlabs';
+import { convertWithFallback } from '../utils/audio-converter';
+import { storagePathUtil } from '../utils/storage';
+import { addTranscriptionFormat } from '../utils/file-storage-db';
 
 const execPromise = promisify(exec);
 
@@ -62,6 +66,28 @@ export async function processTranscriptionJob(job: TranscriptionJob, supabase: S
       throw new Error(`Failed to get audio file details: ${audioFileError?.message || 'File not found'}`);
     }
     
+    // Check if the file has been deleted
+    if (audioFile.status === 'deleted') {
+      console.error(`Audio file ${audioFile.id} has been deleted, cannot process transcription`);
+      
+      // Update the transcription status to failed
+      await supabase
+        .from('transcriptions')
+        .update({
+          status: 'failed',
+          error_message: 'The audio file has been deleted',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', job.payload.transcription_id);
+      
+      // Return failure result
+      return {
+        file_id: job.payload.file_id,
+        success: false,
+        error: 'The audio file has been deleted'
+      };
+    }
+    
     // Get the file URL from the storage bucket
     const { data: fileData, error: fileError } = await supabase
       .storage
@@ -92,31 +118,60 @@ export async function processTranscriptionJob(job: TranscriptionJob, supabase: S
     const originalFilePath = path.join(tempDir, `${job.id}_original${path.extname(audioFile.file_name)}`);
     fs.writeFileSync(originalFilePath, Buffer.from(fileResponse.data));
     
-    // Determine if we need to convert the file
-    const fileExtension = path.extname(audioFile.file_name).toLowerCase();
+    // Create transcription-optimized format
+    console.log('Creating transcription-optimized format...');
+    const transcriptionDir = path.join(tempDir, 'transcription');
+    
     let finalFilePath = originalFilePath;
     
-    // Check if ffmpeg is available
-    let ffmpegAvailable = false;
     try {
-      await execPromise('ffmpeg -version');
-      ffmpegAvailable = true;
-    } catch (error) {
-      console.warn('ffmpeg is not available, skipping conversion');
-    }
-    
-    // Convert file if needed and ffmpeg is available
-    if (ffmpegAvailable && (fileExtension === '.m4a' || fileExtension === '.x-m4a')) {
-      try {
-        const mp3FilePath = path.join(tempDir, `${job.id}.mp3`);
-        console.log(`Converting ${fileExtension} to mp3...`);
-        await execPromise(`ffmpeg -i "${originalFilePath}" -vn -ar 44100 -ac 2 -b:a 192k "${mp3FilePath}"`);
-        finalFilePath = mp3FilePath;
-        console.log('Conversion completed successfully');
-      } catch (conversionError) {
-        console.error('Error converting file:', conversionError);
-        // Continue with original file if conversion fails
+      // Convert to transcription-optimized format (16kHz mono WAV)
+      const conversionResult = await convertWithFallback(originalFilePath, transcriptionDir);
+      
+      // Use the converted file for transcription
+      finalFilePath = conversionResult.outputPath;
+      
+      // If conversion was successful and this is a new format, store it in the database
+      if (conversionResult.success && conversionResult.outputPath !== originalFilePath) {
+        console.log('Conversion successful, storing format information in database');
+        
+        // Generate the storage path for the transcription format
+        const transcriptionPath = storagePathUtil.getTranscriptionPath(
+          audioFile.user_id,
+          audioFile.file_name
+        );
+        
+        // Save the converted file to storage
+        const transcriptionFilePath = path.join(
+          process.env.SUPABASE_STORAGE_PATH || '',
+          storagePathUtil.getFullStoragePath(transcriptionPath)
+        );
+        
+        // Ensure directory exists
+        const transcriptionFileDir = path.dirname(transcriptionFilePath);
+        if (!fs.existsSync(transcriptionFileDir)) {
+          fs.mkdirSync(transcriptionFileDir, { recursive: true });
+        }
+        
+        // Copy the converted file to storage
+        fs.copyFileSync(conversionResult.outputPath, transcriptionFilePath);
+        
+        // Store format information in database
+        await addTranscriptionFormat(supabase, audioFile.id, {
+          path: transcriptionPath,
+          format: conversionResult.format,
+          sample_rate: conversionResult.sampleRate,
+          channels: conversionResult.channels
+        });
+        
+        console.log('Transcription format stored in database');
+      } else if (!conversionResult.success) {
+        console.warn('Conversion failed, using original file for transcription');
       }
+    } catch (conversionError) {
+      console.error('Error during conversion:', conversionError);
+      console.warn('Using original file for transcription');
+      finalFilePath = originalFilePath;
     }
     
     let transcriptionResult;

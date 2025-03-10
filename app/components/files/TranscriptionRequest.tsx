@@ -11,7 +11,7 @@ import { JobStatus } from '@/app/components/jobs/JobStatus';
 
 export type TranscriptionRequestProps = {
   fileId: string;
-  onTranscriptionCreated?: (transcriptionId: string, jobId: string) => void;
+  onTranscriptionCreated?: (transcriptionId: string) => void;
   className?: string;
 };
 
@@ -62,7 +62,7 @@ export function TranscriptionRequest({
       setJobId(data.job.id);
       
       if (onTranscriptionCreated) {
-        onTranscriptionCreated(data.transcription.id, data.job.id);
+        onTranscriptionCreated(data.transcription.id);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
