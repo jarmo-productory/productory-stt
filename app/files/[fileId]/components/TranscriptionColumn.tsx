@@ -5,6 +5,7 @@ import { FileText } from 'lucide-react';
 import { useAuth } from "@/contexts/AuthContext";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { TranscriptionRequest, TranscriptionView } from "@/app/components/files";
+import { useAudioPlayer } from "@/app/contexts/AudioPlayerContext";
 
 // Define FileObject interface locally if it's not available from a module
 interface FileObject {
@@ -23,10 +24,10 @@ interface TranscriptionColumnProps {
 export function TranscriptionColumn({ file }: TranscriptionColumnProps) {
   const [transcriptionId, setTranscriptionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [transcriptionFormats, setTranscriptionFormats] = useState<any>(null);
   const { user } = useAuth();
   const supabase = createClientComponentClient();
+  const { setAudioUrl } = useAudioPlayer();
   
   // Fetch transcription formats when file is available
   useEffect(() => {
@@ -132,7 +133,24 @@ export function TranscriptionColumn({ file }: TranscriptionColumnProps) {
       try {
         console.log('Getting audio URL for file:', file.id);
         
-        // Try normalized_path first (preferred method)
+        // Check for optimized format first
+        if (transcriptionFormats?.optimized?.path) {
+          console.log('Using optimized format path:', transcriptionFormats.optimized.path);
+          const { data, error } = await supabase
+            .storage
+            .from('audio-files')
+            .createSignedUrl(transcriptionFormats.optimized.path, 3600);
+          
+          if (!error && data) {
+            setAudioUrl(data.signedUrl);
+            console.log('Audio URL created using optimized format');
+            return;
+          } else {
+            console.warn('Failed to create signed URL with optimized format:', error);
+          }
+        }
+        
+        // Try normalized_path next (preferred method)
         if (file.normalized_path) {
           console.log('Using normalized_path:', file.normalized_path);
           const { data, error } = await supabase
@@ -140,7 +158,7 @@ export function TranscriptionColumn({ file }: TranscriptionColumnProps) {
             .from('audio-files')
             .createSignedUrl(file.normalized_path, 3600);
           
-          if (!error) {
+          if (!error && data) {
             setAudioUrl(data.signedUrl);
             console.log('Audio URL created using normalized_path');
             return;
@@ -163,7 +181,7 @@ export function TranscriptionColumn({ file }: TranscriptionColumnProps) {
           .from('audio-files')
           .createSignedUrl(filePath, 3600);
         
-        if (error) {
+        if (error || !data) {
           console.error('Error creating signed URL:', error);
           return;
         }
@@ -176,7 +194,7 @@ export function TranscriptionColumn({ file }: TranscriptionColumnProps) {
     }
     
     getAudioUrl();
-  }, [file, user, supabase]);
+  }, [file, user, supabase, transcriptionFormats, setAudioUrl]);
   
   const handleTranscriptionCreated = (newTranscriptionId: string) => {
     console.log('Transcription created:', newTranscriptionId);
@@ -184,27 +202,19 @@ export function TranscriptionColumn({ file }: TranscriptionColumnProps) {
   };
   
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6">
-      <div className="flex items-center mb-4">
-        <FileText className="h-5 w-5 mr-2 text-blue-500" />
-        <h2 className="text-lg font-semibold">Transcription</h2>
-      </div>
-      
-      {isLoading ? (
-        <div className="flex justify-center items-center h-40">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        </div>
-      ) : transcriptionId ? (
-        <TranscriptionView 
-          transcriptionId={transcriptionId} 
-          audioUrl={audioUrl || undefined}
-          className="w-full"
-          transcriptionFormats={transcriptionFormats}
-        />
-      ) : (
+    <div className="space-y-4">
+      {!transcriptionId && !isLoading && (
         <TranscriptionRequest 
           fileId={file?.id || ''} 
-          onTranscriptionCreated={handleTranscriptionCreated}
+          onTranscriptionCreated={handleTranscriptionCreated} 
+        />
+      )}
+      
+      {transcriptionId && (
+        <TranscriptionView 
+          transcriptionId={transcriptionId} 
+          className="w-full"
+          transcriptionFormats={transcriptionFormats}
         />
       )}
     </div>

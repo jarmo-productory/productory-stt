@@ -16,12 +16,16 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { NotesTab } from './components/NotesTab';
 import { AISummaryTab } from './components/AISummaryTab';
 import { OverviewTab } from './components/OverviewTab';
+import { AudioPlayerProvider } from "@/app/contexts/AudioPlayerContext";
+import { AudioPlayer } from "@/app/components/audio/AudioPlayer";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { useAudioPlayer } from "@/app/contexts/AudioPlayerContext";
 
 interface ClientFileDetailsPageProps {
   fileId: string;
 }
 
-export default function ClientFileDetailsPage({ fileId }: ClientFileDetailsPageProps) {
+function FileDetailsContent({ fileId }: { fileId: string }) {
   const [fileName, setFileName] = useState("Loading...");
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState("");
@@ -29,17 +33,48 @@ export default function ClientFileDetailsPage({ fileId }: ClientFileDetailsPageP
   const [folderId, setFolderId] = useState<string | null>(null);
   const [fileData, setFileData] = useState<FileObject | null>(null);
   const [activeTab, setActiveTab] = useState("transcription");
+  const [transcriptionStatus, setTranscriptionStatus] = useState<'none' | 'pending' | 'processing' | 'completed' | 'failed'>('none');
   const router = useRouter();
   const { user } = useAuth();
   const { handleRenameFile, setSelectedFile, setOnFileUpdated } = useFileActions();
+  const supabase = createClientComponentClient();
+  const { setAudioUrl } = useAudioPlayer();
+  
+  // Function to get signed URL for audio file
+  const getSignedUrl = async (filePath: string) => {
+    try {
+      const { data, error } = await supabase
+        .storage
+        .from('audio')
+        .createSignedUrl(filePath, 3600); // 1 hour expiry
+
+      if (error || !data) {
+        console.error('Error getting signed URL:', error);
+        return null;
+      }
+
+      return data.signedUrl;
+    } catch (error) {
+      console.error('Error in getSignedUrl:', error);
+      return null;
+    }
+  };
   
   // Function to update file data when it changes
-  const handleFileUpdate = (updatedFile: FileObject | undefined) => {
+  const handleFileUpdate = async (updatedFile: FileObject | undefined) => {
     if (!updatedFile) return; // Guard against undefined values
     
     setFileName(updatedFile.metadata?.display_name || updatedFile.name || updatedFile.file_name || 'Unnamed File');
     setEditedName(updatedFile.metadata?.display_name || updatedFile.name || updatedFile.file_name || '');
     setFileData(updatedFile);
+
+    // Get and set audio URL
+    if (updatedFile.file_path) {
+      const signedUrl = await getSignedUrl(updatedFile.file_path);
+      if (signedUrl) {
+        setAudioUrl(signedUrl);
+      }
+    }
   };
   
   // Register the callback when component mounts
@@ -76,8 +111,29 @@ export default function ClientFileDetailsPage({ fileId }: ClientFileDetailsPageP
         setFolderName(folderName);
         setFolderId(folderId);
         setSelectedFile(fileData);
+
+        // Check transcription status
+        try {
+          const { data: transcriptionData } = await supabase
+            .from('transcriptions')
+            .select('status')
+            .eq('file_id', fileData.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (transcriptionData) {
+            setTranscriptionStatus(transcriptionData.status as any);
+          } else {
+            setTranscriptionStatus('none');
+          }
+        } catch (error) {
+          console.error('Error fetching transcription status:', error);
+          setTranscriptionStatus('none');
+        }
       } else {
         setFileName("Unnamed File");
+        setTranscriptionStatus('none');
       }
     };
     
@@ -146,8 +202,13 @@ export default function ClientFileDetailsPage({ fileId }: ClientFileDetailsPageP
         actions={fileData && <FileActionsMenu file={fileData} onStartRename={startEditing} />}
       />
       
+      {/* Audio Player */}
+      <div className="px-4">
+        <AudioPlayer transcriptionStatus={transcriptionStatus} />
+      </div>
+      
       {/* Tab layout */}
-      <div className="p-4">
+      <div className="p-4"> {/* Removed pb-24 since we don't need extra padding for fixed player */}
         <Tabs defaultValue={activeTab} onValueChange={handleTabChange} className="w-full">
           <TabsList className="w-full justify-start mb-4">
             <TabsTrigger value="transcription" className="flex items-center">
@@ -186,5 +247,13 @@ export default function ClientFileDetailsPage({ fileId }: ClientFileDetailsPageP
         </Tabs>
       </div>
     </AppLayout>
+  );
+}
+
+export default function ClientFileDetailsPage({ fileId }: ClientFileDetailsPageProps) {
+  return (
+    <AudioPlayerProvider>
+      <FileDetailsContent fileId={fileId} />
+    </AudioPlayerProvider>
   );
 } 

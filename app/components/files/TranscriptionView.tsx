@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { formatDuration } from '@/lib/utils';
 import { JobStatus } from '@/app/components/jobs/JobStatus';
+import React from 'react';
+import { useAudioPlayer } from '@/app/contexts/AudioPlayerContext';
 
 export type TranscriptionViewProps = {
   transcriptionId: string;
-  audioUrl?: string;
   className?: string;
   transcriptionFormats?: {
     optimized?: {
@@ -61,9 +62,117 @@ const toNumber = (value: string | number): number => {
   return parseFloat(value);
 };
 
+// Helper function to format timestamp for inline display (M:SS)
+const formatInlineTimestamp = (seconds: number): string => {
+  if (isNaN(seconds)) return '(0:00)';
+  
+  const minutes = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  
+  return `(${minutes}:${secs.toString().padStart(2, '0')})`;
+};
+
+// Group segments by speaker
+type GroupedSegment = {
+  speakerId: string;
+  segments: TranscriptionSegment[];
+};
+
+const groupSegmentsBySpeaker = (segments: TranscriptionSegment[]): GroupedSegment[] => {
+  const result: GroupedSegment[] = [];
+  let currentGroup: GroupedSegment | null = null;
+  
+  segments.forEach(segment => {
+    const speakerId = segment.speaker_id || 'unknown';
+    
+    if (!currentGroup || currentGroup.speakerId !== speakerId) {
+      currentGroup = {
+        speakerId,
+        segments: [segment]
+      };
+      result.push(currentGroup);
+    } else {
+      currentGroup.segments.push(segment);
+    }
+  });
+  
+  return result;
+};
+
+// Component to render a speaker's segments
+const SpeakerSegment = ({ 
+  speakerId, 
+  segments,
+  onSegmentClick,
+  activeSegmentId
+}: GroupedSegment & { 
+  onSegmentClick?: (segmentId: string, startTime: number) => void,
+  activeSegmentId?: string | null
+}) => {
+  // Generate speaker label (Speaker 1, Speaker 2, etc.)
+  const speakerLabel = speakerId === 'unknown' 
+    ? 'Unknown Speaker' 
+    : `Speaker ${speakerId}`;
+  
+  // Create refs for active segments
+  const segmentRefs = useMemo(() => {
+    const refs: { [key: string]: React.RefObject<HTMLParagraphElement | null> } = {};
+    segments.forEach(segment => {
+      refs[segment.id] = React.createRef<HTMLParagraphElement | null>();
+    });
+    return refs;
+  }, [segments]);
+  
+  // Scroll to active segment when it changes
+  useEffect(() => {
+    if (activeSegmentId && segmentRefs[activeSegmentId]?.current) {
+      segmentRefs[activeSegmentId].current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+    }
+  }, [activeSegmentId, segmentRefs]);
+  
+  return (
+    <div className="mb-4">
+      {/* Speaker header - more subtle as a subheading */}
+      <h3 className="text-base font-medium text-gray-700 mb-1">{speakerLabel}</h3>
+      
+      {/* Speaker's segments - flowing like a normal document */}
+      <div className="pl-0">
+        {segments.map((segment, index) => {
+          const startTime = toNumber(segment.start_time);
+          const inlineTimestamp = formatInlineTimestamp(startTime);
+          const isActive = activeSegmentId === segment.id;
+          
+          // Add data attributes for audio player integration
+          return (
+            <p 
+              key={segment.id} 
+              ref={segmentRefs[segment.id]}
+              className={`
+                ${index > 0 ? 'mt-2' : ''} 
+                ${isActive ? 'bg-yellow-100 border-l-4 border-yellow-500 pl-2' : ''} 
+                ${onSegmentClick ? 'cursor-pointer hover:bg-gray-50' : ''}
+                relative transition-all duration-200 ease-in-out rounded-sm
+              `}
+              data-start-time={startTime}
+              data-end-time={toNumber(segment.end_time)}
+              data-segment-id={segment.id}
+              onClick={() => onSegmentClick?.(segment.id, startTime)}
+            >
+              <span className="text-gray-400 font-normal mr-1">{inlineTimestamp}</span>
+              {segment.text}
+            </p>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export function TranscriptionView({
   transcriptionId,
-  audioUrl,
   className,
   transcriptionFormats,
 }: TranscriptionViewProps) {
@@ -72,6 +181,37 @@ export function TranscriptionView({
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [shouldPoll, setShouldPoll] = useState(false);
+  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  
+  // Get audio player context
+  const { seekTo, play, setActiveSegment, currentTime } = useAudioPlayer();
+  
+  // Enhanced segment click handler
+  const handleSegmentClick = (segmentId: string, startTime: number) => {
+    setActiveSegmentId(segmentId);
+    setActiveSegment(segmentId);
+    
+    // Seek to the segment's start time and play
+    seekTo(startTime);
+    play();
+  };
+  
+  // Find and highlight the current segment based on audio playback time
+  useEffect(() => {
+    if (!transcription?.segments || !currentTime) return;
+    
+    // Find the segment that corresponds to the current playback time
+    const currentSegment = transcription.segments.find(segment => {
+      const startTime = toNumber(segment.start_time);
+      const endTime = toNumber(segment.end_time);
+      return currentTime >= startTime && currentTime < endTime;
+    });
+    
+    if (currentSegment && currentSegment.id !== activeSegmentId) {
+      setActiveSegmentId(currentSegment.id);
+      setActiveSegment(currentSegment.id);
+    }
+  }, [currentTime, transcription?.segments, activeSegmentId, setActiveSegment]);
   
   // Initial data fetch - only runs once
   useEffect(() => {
@@ -171,6 +311,12 @@ export function TranscriptionView({
     return () => clearInterval(intervalId);
   }, [transcriptionId, shouldPoll, transcription?.status]);
   
+  // Group segments by speaker
+  const groupedSegments = useMemo(() => {
+    if (!transcription || !transcription.segments) return [];
+    return groupSegmentsBySpeaker(transcription.segments);
+  }, [transcription]);
+  
   if (loading) {
     return (
       <div className={`flex items-center justify-center p-8 ${className}`}>
@@ -244,33 +390,25 @@ export function TranscriptionView({
         </Badge>
       </div>
       
-      {/* Transcription segments */}
-      <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
-        {transcription.segments.map((segment) => {
-          const startTime = toNumber(segment.start_time);
-          const endTime = toNumber(segment.end_time);
-          const speakerId = segment.speaker_id ? String(segment.speaker_id) : null;
-          
-          return (
-            <div 
-              key={segment.id}
-              className={`p-3 rounded-md mb-2 cursor-pointer transition-colors`}
-            >
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-xs text-muted-foreground">
-                  {formatDuration(startTime)} - {formatDuration(endTime)}
-                </span>
-                
-                {speakerId && (
-                  <div className="inline-flex items-center border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-full">
-                    {speakerId}
-                  </div>
-                )}
-              </div>
-              <p className="text-sm">{segment.text}</p>
-            </div>
-          );
-        })}
+      {/* Enhanced transcription display - full height with natural text flow */}
+      <div className="overflow-y-auto pr-2" style={{ height: 'calc(100vh - 300px)', minHeight: '400px' }}>
+        {groupedSegments.length > 0 ? (
+          <div className="space-y-6">
+            {groupedSegments.map((group, index) => (
+              <SpeakerSegment 
+                key={`${group.speakerId}-${index}`}
+                speakerId={group.speakerId}
+                segments={group.segments}
+                onSegmentClick={handleSegmentClick}
+                activeSegmentId={activeSegmentId}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="p-4 border rounded-md bg-gray-50">
+            <p className="text-gray-500">No transcription segments available.</p>
+          </div>
+        )}
       </div>
     </div>
   );
