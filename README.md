@@ -249,6 +249,24 @@ Authentication is handled through Supabase with support for:
 - Magic Links
 - Password Reset
 
+### CI/CD Pipeline
+
+This project uses a robust CI/CD pipeline with GitHub Actions and Netlify:
+
+- **Environments**:
+  - TEST: Deployed to [productory-stt-test.netlify.app](https://productory-stt-test.netlify.app)
+  - PRODUCTION: Deployed to [productory-stt-prod.netlify.app](https://productory-stt-prod.netlify.app)
+
+- **Workflow**:
+  - Feature branches → Pull Request → Test branch → Production branch
+  - Automated testing and deployment to TEST environment
+  - Manual promotion to PRODUCTION after verification
+
+- **Branch Protection**:
+  - Protected branches: `master` (PRODUCTION) and `test` (TEST)
+  - Required pull request reviews
+  - Required status checks
+
 ### Payment Integration
 
 Stripe integration includes:
