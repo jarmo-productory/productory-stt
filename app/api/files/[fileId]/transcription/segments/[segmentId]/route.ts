@@ -31,7 +31,7 @@ export async function PUT(
   let body;
   try {
     body = await req.json();
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Invalid request body' },
       { status: 400 }

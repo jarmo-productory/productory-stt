@@ -100,10 +100,14 @@ export async function POST(request: Request) {
       failedResets: stuckJobs.length - resetCount
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error resetting stuck jobs:', error);
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : 'Unknown error occurred';
+    
     return NextResponse.json(
-      { error: `Failed to reset stuck jobs: ${error.message}` },
+      { error: `Failed to reset stuck jobs: ${errorMessage}` },
       { status: 500 }
     );
   }

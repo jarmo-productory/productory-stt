@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
 import { authenticateRequest, createAuthErrorResponse } from '@/lib/auth';
 import { verifyFileOwnership, createOwnershipErrorResponse } from '@/lib/files';
-import { getTranscription, createTranscription } from '@/lib/transcriptions';
-import { createJob } from '@/lib/jobs';
+import { getTranscription } from '@/lib/transcriptions';
 import { createClient } from '@/lib/supabase/server';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -87,7 +84,7 @@ export async function POST(
     }
 
     // Check if file already has a transcription
-    const { data: existingTranscription, error: transcriptionError } = await (await createClient())
+    const { data: existingTranscription } = await (await createClient())
       .from('transcriptions')
       .select('*')
       .eq('file_id', fileId)

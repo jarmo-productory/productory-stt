@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import type { JobStatus } from '@/lib/jobs';
+
+// Define the update data type based on the job_queue table structure
+interface JobUpdateData {
+  status: JobStatus;
+  started_at?: string;
+  completed_at?: string;
+}
 
 /**
  * POST /api/jobs/update
@@ -41,7 +49,7 @@ export async function POST(request: NextRequest) {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
     // Update the job status
-    const updateData: any = { status };
+    const updateData: JobUpdateData = { status };
     
     // Add timestamps based on status
     if (status === 'processing') {

@@ -36,6 +36,8 @@ export interface AudioFile {
   folder_id?: string | null;
   transcription_formats?: {
     optimized?: TranscriptionFormat;
+    google?: TranscriptionFormat;
+    whisper?: TranscriptionFormat;
   };
 }
 
@@ -428,4 +430,47 @@ export function isTranscriptionFormatAvailable(
     audioFile.transcription_formats !== null &&
     audioFile.transcription_formats.optimized !== undefined
   );
+}
+
+/**
+ * Get all available transcription formats for an audio file
+ * @param audioFile The audio file record
+ * @returns Array of available transcription formats with service information
+ */
+export function getAvailableTranscriptionFormats(
+  audioFile: AudioFile
+): Array<TranscriptionFormat & { service: string }> {
+  const formats: Array<TranscriptionFormat & { service: string }> = [];
+  
+  // Skip if no transcription formats available
+  if (!audioFile.transcription_formats) {
+    return formats;
+  }
+  
+  // Add optimized format if available
+  if (audioFile.transcription_formats.optimized) {
+    formats.push({
+      ...audioFile.transcription_formats.optimized,
+      service: 'optimized'
+    });
+  }
+  
+  return formats;
+}
+
+/**
+ * Get the best transcription format for an audio file
+ * @param audioFile The audio file record
+ * @returns The path to the best transcription format or the original file path if none available
+ */
+export function getBestTranscriptionFormat(
+  audioFile: AudioFile
+): string {
+  // If optimized format is available, use it
+  if (audioFile.transcription_formats?.optimized) {
+    return audioFile.transcription_formats.optimized.path;
+  }
+  
+  // Otherwise return the original file path
+  return audioFile.file_path;
 } 
