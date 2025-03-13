@@ -10,7 +10,7 @@ import { verifyFileOwnership, createOwnershipErrorResponse } from '@/lib/files';
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { fileId: string } }
+  { params }: { params: Promise<{ fileId: string }> }
 ) {
   // Authenticate the request
   const authResult = await authenticateRequest(req);
@@ -18,7 +18,7 @@ export async function GET(
     return createAuthErrorResponse(authResult);
   }
 
-  const { fileId } = params;
+  const { fileId } = await params;
 
   // Verify file ownership
   const ownershipResult = await verifyFileOwnership(authResult.userId, fileId);
@@ -68,7 +68,7 @@ export async function GET(
  */
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { fileId: string } }
+  { params }: { params: Promise<{ fileId: string }> }
 ) {
   // Authenticate the request
   const authResult = await authenticateRequest(req);
@@ -76,7 +76,7 @@ export async function PUT(
     return createAuthErrorResponse(authResult);
   }
 
-  const { fileId } = params;
+  const { fileId } = await params;
 
   // Verify file ownership
   const ownershipResult = await verifyFileOwnership(authResult.userId, fileId);
