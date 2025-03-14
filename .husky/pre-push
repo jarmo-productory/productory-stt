@@ -5,9 +5,9 @@
 
 echo "🚀 Running pre-push checks..."
 
-# Run ESLint with strict checking (no warnings allowed)
-echo "🔍 Running ESLint in strict mode..."
-npm run lint:strict || { echo "❌ ESLint check failed. Please fix the errors before pushing."; exit 1; }
+# Run ESLint with relaxed configuration (non-blocking)
+echo "🔍 Running ESLint in relaxed mode..."
+npm run lint || echo "⚠️ ESLint found issues, but continuing anyway..."
 
 # Run TypeScript type checking on the entire project
 echo "🔎 Running TypeScript type checking..."

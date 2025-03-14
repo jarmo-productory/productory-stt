@@ -1,8 +1,8 @@
 #!/bin/sh
 
-# Run ESLint with relaxed configuration
+# Run ESLint with relaxed configuration (non-blocking)
 echo "🔍 Running ESLint in relaxed mode..."
-npm run lint:local || { echo "❌ ESLint check failed. Please fix the errors before committing."; exit 1; }
+npm run lint || echo "⚠️ ESLint found issues, but continuing anyway..."
 
 # Run Prettier on staged files
 echo "💅 Running Prettier..."

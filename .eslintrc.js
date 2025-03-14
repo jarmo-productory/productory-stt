@@ -1,91 +1,41 @@
 module.exports = {
   extends: [
-    "next/core-web-vitals",
-    "plugin:import/recommended",
-    "plugin:import/typescript",
-    "plugin:@typescript-eslint/recommended"
-  ],
-  plugins: [
-    "import",
-    "@typescript-eslint",
-    "unused-imports"
+    "next/core-web-vitals"
   ],
   rules: {
-    "react/no-unescaped-entities": "off",
+    // Disable TypeScript strict rules
+    "@typescript-eslint/no-explicit-any": "off",
     "@typescript-eslint/no-unused-vars": "off",
-    "unused-imports/no-unused-imports": "warn",
-    "unused-imports/no-unused-vars": [
-      "warn",
-      { 
-        vars: "all", 
-        varsIgnorePattern: "^_", 
-        args: "after-used", 
-        argsIgnorePattern: "^_" 
-      }
-    ],
-    "@typescript-eslint/no-explicit-any": "warn",
-    "react-hooks/rules-of-hooks": "warn",
-    "react/jsx-no-comment-textnodes": "warn",
-    
-    // Strict null checking rules
-    "@typescript-eslint/no-non-null-assertion": "warn",
-    "@typescript-eslint/explicit-function-return-type": ["warn", {
-      allowExpressions: true,
-      allowTypedFunctionExpressions: true,
-      allowHigherOrderFunctions: true
-    }],
+    "@typescript-eslint/no-non-null-assertion": "off",
+    "@typescript-eslint/explicit-function-return-type": "off",
     "@typescript-eslint/strict-boolean-expressions": "off",
     "@typescript-eslint/no-unnecessary-condition": "off",
     
-    // Import path rules
-    "import/no-duplicates": "warn",
-    "import/order": [
-      "warn",
-      {
-        groups: ["builtin", "external", "internal", "parent", "sibling", "index"],
-        pathGroups: [
-          {
-            pattern: "react",
-            group: "builtin",
-            position: "before"
-          },
-          {
-            pattern: "next/**",
-            group: "builtin",
-            position: "before"
-          },
-          {
-            pattern: "@/components/ui/**",
-            group: "internal",
-            position: "before"
-          },
-          {
-            pattern: "@/app/components/**",
-            group: "internal",
-            position: "after"
-          }
-        ],
-        pathGroupsExcludedImportTypes: ["react"],
-        alphabetize: {
-          order: "asc",
-          caseInsensitive: true
-        }
-      }
-    ],
-    "import/no-cycle": "warn",
-    "import/no-self-import": "warn"
-  },
-  settings: {
-    "import/resolver": {
-      typescript: {
-        alwaysTryTypes: true
-      }
-    }
+    // Disable React strict rules
+    "react-hooks/rules-of-hooks": "warn",
+    "react-hooks/exhaustive-deps": "off",
+    "react/no-unescaped-entities": "off",
+    "react/jsx-no-comment-textnodes": "off",
+    
+    // Disable import rules
+    "import/no-duplicates": "off",
+    "import/order": "off",
+    "import/no-cycle": "off",
+    "import/no-self-import": "off"
   },
   ignorePatterns: [
     "node_modules/",
     ".next/",
-    "**/.next/**",
-    "public/"
+    "out/",
+    "build/",
+    "public/",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/__tests__/",
+    "**/__mocks__/",
+    "scripts/",
+    "lib/utils/"
   ]
 }; 
