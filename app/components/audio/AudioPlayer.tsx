@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Volume2, Volume1, VolumeX, Keyboard, HelpCircle } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, Volume1, VolumeX, Keyboard } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { formatDuration } from '@/lib/utils';

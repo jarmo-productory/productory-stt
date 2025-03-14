@@ -32,7 +32,6 @@ export function FileActionsProvider({ children }: { children: ReactNode }) {
   const [selectedFile, setSelectedFile] = useState<FileObject | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
-  const [newFileName, setNewFileName] = useState('');
   const [onFileUpdated, setOnFileUpdated] = useState<((file: FileObject | undefined) => void) | undefined>(undefined);
 
   const openDeleteModal = (file: FileObject) => {
@@ -47,7 +46,6 @@ export function FileActionsProvider({ children }: { children: ReactNode }) {
 
   const openRenameModal = (file: FileObject) => {
     setSelectedFile(file);
-    setNewFileName(file.metadata?.display_name || file.name || file.file_name || '');
     setIsRenameModalOpen(true);
   };
 

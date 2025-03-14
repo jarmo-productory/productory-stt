@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
  * Simple health check endpoint for the API
  * Used by the worker script to verify the API is running
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   return NextResponse.json({
     status: 'ok',
     message: 'API is running',

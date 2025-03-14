@@ -43,7 +43,7 @@ export async function GET(
     }
 
     // Remove the joined data before returning
-    const { audio_file, ...transcription } = data;
+    const transcription = data;
 
     // Fetch segments
     const { data: segments, error: segmentsError } = await supabase

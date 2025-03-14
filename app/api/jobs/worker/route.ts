@@ -1,6 +1,4 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { processTranscriptionJob } from '@/lib/jobs/transcription';
 
@@ -65,21 +63,23 @@ export async function POST(request: Request) {
               { status: 400 }
             );
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Error processing job:', error);
+        
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         
         // Update job status to failed
         await supabase
           .from('job_queue')
           .update({
             status: 'failed',
-            error_message: error.message || 'Unknown error',
+            error_message: errorMessage,
             completed_at: new Date().toISOString()
           })
           .eq('id', jobId);
 
         return NextResponse.json(
-          { error: `Job processing failed: ${error.message}` },
+          { error: `Job processing failed: ${errorMessage}` },
           { status: 500 }
         );
       }
@@ -114,10 +114,11 @@ export async function POST(request: Request) {
       { status: 400 }
     );
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Worker API error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: `Internal server error: ${error.message}` },
+      { error: `Internal server error: ${errorMessage}` },
       { status: 500 }
     );
   }
@@ -133,10 +134,11 @@ export async function GET(request: Request) {
 
     console.log('Health check: Authorized request received');
     return NextResponse.json({ status: 'healthy' });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Health check error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { status: 'unhealthy', error: error.message },
+      { status: 'unhealthy', error: errorMessage },
       { status: 500 }
     );
   }
