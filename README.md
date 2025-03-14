@@ -223,6 +223,12 @@ To maintain consistency and avoid duplication, follow these component organizati
 - App components: `import { ComponentName } from "@/app/components/ComponentName"`
 - Feature components: `import { ComponentName } from "@/app/[feature]/components/ComponentName"`
 
+### Path Aliases
+
+This project uses path aliases to simplify imports. The main alias is `@/` which points to the root directory.
+
+For more details on path aliases, see [Path Aliases Documentation](./docs/PATH-ALIASES.md).
+
 ## 🛠️ Built With
 
 - [Next.js](https://nextjs.org/) - React framework
@@ -318,7 +324,7 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Made with 🔥 by [ShenSeanChen](https://github.com/ShenSeanChen)
 
-## �� Code Quality
+## 🧪 Code Quality
 
 This project includes a comprehensive setup for code quality:
 

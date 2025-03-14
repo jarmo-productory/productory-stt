@@ -10,4 +10,8 @@ services:
       - key: NODE_ENV
         value: production
       - key: NODE_VERSION
-        value: 20 
+        value: 20
+      - key: NEXT_TELEMETRY_DISABLED
+        value: 1
+      - key: NEXT_SHARP_PATH
+        value: /opt/render/project/node_modules/sharp 
