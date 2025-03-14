@@ -54,7 +54,7 @@ export function FileDeleteModal({ isOpen, onOpenChange, file, onSuccess }: FileD
         <AlertDialogHeader>
           <AlertDialogTitle>Delete File</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to delete the file "{file?.name || file?.file_name}"? This action cannot be undone.
+            Are you sure you want to delete the file &quot;{file?.name || file?.file_name}&quot;? This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

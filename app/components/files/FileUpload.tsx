@@ -7,14 +7,10 @@ import { useSupabase } from '@/hooks/useSupabase';
 import { 
   Upload,
   FileAudio,
-  Plus,
   X,
   Check,
-  XCircle,
-  Ban,
   Loader2,
   AlertCircle,
-  FileWarning,
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from "@/components/ui/button";

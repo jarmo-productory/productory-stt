@@ -1,6 +1,5 @@
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { FileObject } from "@/contexts/FileContext";
-import { storagePathUtil } from "@/lib/utils/storage";
 
 /**
  * Service for handling file-related operations
@@ -38,7 +37,7 @@ export class FileService {
           size: data.size || 0,
           created_at: data.created_at,
           duration: data.duration,
-          status: data.status as any,
+          status: data.status as FileObject['status'],
           metadata: data.metadata,
           folder_id: data.folder_id,
           file_name: data.file_name,
@@ -73,18 +72,16 @@ export class FileService {
   }
 
   /**
-   * Renames a file
+   * Renames a file by updating its display name in metadata
    * @param fileId The ID of the file to rename
    * @param fileData The current file data
-   * @param newName The new name for the file
-   * @param userId The ID of the user performing the rename
+   * @param newName The new display name for the file
    * @returns The updated file data if successful
    */
   static async renameFile(
     fileId: string,
     fileData: FileObject,
-    newName: string,
-    userId: string
+    newName: string
   ): Promise<FileObject | null> {
     const supabase = createClientComponentClient();
     
