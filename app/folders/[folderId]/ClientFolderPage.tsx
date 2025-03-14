@@ -4,19 +4,16 @@ import { AppLayout } from "@/app/components/layout/AppLayout";
 import { Breadcrumbs } from "@/app/components/layout/Breadcrumbs";
 import { PageHeader } from "@/app/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ChevronLeft, Upload, FolderPlus, Pencil, Trash2, Loader2 } from "lucide-react";
-import { useFiles, FileObject } from '@/contexts/FileContext';
+import { Upload, FolderPlus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { useFiles } from '@/contexts/FileContext';
 import { FileList } from '@/app/components/files/FileList';
 import { FileUpload } from '@/app/components/files/FileUpload';
-import { FileDeleteModal } from '@/app/components/files/FileDeleteModal';
 import { FolderModal } from '@/app/components/folders/FolderModal';
 import { DeleteModal } from '@/app/components/folders/DeleteModal';
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useFileActions } from '@/app/components/files/FileActionsProvider';
 
 interface ClientFolderPageProps {
   folderId: string;
@@ -32,8 +29,7 @@ export default function ClientFolderPage({ folderId }: ClientFolderPageProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
-  const { files, isLoading, error, refreshFiles } = useFiles();
-  const { setSelectedFile } = useFileActions();
+  const { files, isLoading, refreshFiles } = useFiles();
 
   // Fetch the actual folder name
   useEffect(() => {
@@ -123,13 +119,6 @@ export default function ClientFolderPage({ folderId }: ClientFolderPageProps) {
       setIsRefreshing(false);
     }, 1000);
   }, [refreshFiles, folderName]);
-
-  // Handle manual refresh
-  const handleRefresh = useCallback(() => {
-    setIsRefreshing(true);
-    refreshFiles();
-    setTimeout(() => setIsRefreshing(false), 1000);
-  }, [refreshFiles]);
 
   return (
     <AppLayout>

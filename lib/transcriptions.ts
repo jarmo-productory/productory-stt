@@ -1,6 +1,6 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { createElevenLabsClient, TranscriptionOptions, TranscriptionResponse, TranscriptionWord } from './elevenlabs';
+import { createElevenLabsClient, TranscriptionOptions, TranscriptionWord } from './elevenlabs';
 import path from 'path';
 import fs from 'fs';
 
@@ -10,10 +10,9 @@ export type TranscriptionStatus = 'pending' | 'processing' | 'completed' | 'fail
 /**
  * Fetches a transcription for a specific file
  * @param fileId The ID of the file
- * @param userId The ID of the user
  * @returns The transcription data with its segments
  */
-export async function getTranscription(fileId: string, userId: string) {
+export async function getTranscription(fileId: string) {
   const cookieStore = cookies();
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
 
@@ -53,13 +52,11 @@ export async function getTranscription(fileId: string, userId: string) {
 /**
  * Creates a new transcription request
  * @param fileId The ID of the file
- * @param userId The ID of the user
  * @param options Transcription options
  * @returns The created transcription record
  */
 export async function createTranscription(
-  fileId: string, 
-  userId: string, 
+  fileId: string,
   options: {
     language?: string;
     modelId?: string;
@@ -227,13 +224,11 @@ async function storeTranscriptionSegments(
 /**
  * Updates a transcription segment
  * @param segmentId The ID of the segment to update
- * @param userId The ID of the user
  * @param updates The updates to apply
  * @returns The updated segment
  */
 export async function updateTranscriptionSegment(
   segmentId: string,
-  userId: string,
   updates: {
     text?: string;
     speaker_id?: string;
@@ -279,16 +274,14 @@ export async function updateTranscriptionSegment(
 /**
  * Formats transcription data for export
  * @param fileId The ID of the file
- * @param userId The ID of the user
  * @param format The export format (txt, srt, etc.)
  * @returns Formatted transcription data
  */
 export async function exportTranscription(
   fileId: string,
-  userId: string,
   format: 'txt' | 'srt' = 'txt'
 ) {
-  const { transcription, segments } = await getTranscription(fileId, userId);
+  const { transcription, segments } = await getTranscription(fileId);
   
   if (!transcription || segments.length === 0) {
     throw new Error('No transcription data available for export');

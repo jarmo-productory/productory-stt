@@ -7,12 +7,9 @@ import os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import FormData from 'form-data';
-import { ElevenLabsClient } from 'elevenlabs';
 import { convertWithFallback } from '../utils/audio-converter';
 import { storagePathUtil } from '../utils/storage';
 import { addTranscriptionFormat } from '../utils/file-storage-db';
-
-const execPromise = promisify(exec);
 
 // Define the job type
 interface TranscriptionJob {
@@ -462,7 +459,7 @@ async function saveTranscriptionSegments(
  * Mock transcription API for development
  * Replace this with your actual transcription API call
  */
-async function mockTranscriptionAPI(audioData: Buffer, options: any) {
+async function mockTranscriptionAPI(_: Buffer, options: any) {
   // Simulate API processing time
   await new Promise(resolve => setTimeout(resolve, 2000));
   

@@ -1,13 +1,4 @@
-import { AppLayout } from "@/app/components/layout/AppLayout";
-import { Breadcrumbs } from "@/app/components/layout/Breadcrumbs";
-import { Button } from "@/components/ui/button";
-import { ChevronLeft, Upload, FolderPlus } from "lucide-react";
-import Link from "next/link";
 import { FileProvider } from '@/contexts/FileContext';
-import { FileList } from '@/app/components/files/FileList';
-import { FileUpload } from '@/app/components/files/FileUpload';
-import { FolderModal } from '@/app/components/folders/FolderModal';
-import { useState } from "react";
 
 // Import necessary components
 import ClientFolderPage from './ClientFolderPage';
