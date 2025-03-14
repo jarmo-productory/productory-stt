@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/check-path-aliases.js && next build && node scripts/debug-build.js && node scripts/post-build.js",
+    "build": "next build",
+    "build:render": "node scripts/check-path-aliases.js && next build && node scripts/debug-build.js && node scripts/post-build.js",
     "start": "next start",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
@@ -21,7 +22,9 @@
     "count-errors": "node scripts/count-errors.js",
     "deploy:render": "node scripts/deploy-to-render.js",
     "export:env": "node scripts/export-env-for-render.js",
-    "test:render": "node scripts/test-render-deployment.js"
+    "test:render": "node scripts/test-render-deployment.js",
+    "vercel:env": "node scripts/export-env-for-vercel.js",
+    "vercel:setup": "node scripts/setup-vercel-env.js"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
