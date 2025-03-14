@@ -29,7 +29,7 @@ export async function GET(
 
   try {
     // Get transcription data
-    const transcriptionData = await getTranscription(fileId, authResult.userId);
+    const transcriptionData = await getTranscription(fileId);
     
     return NextResponse.json(transcriptionData);
   } catch (error) {

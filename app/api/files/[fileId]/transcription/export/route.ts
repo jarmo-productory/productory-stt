@@ -39,7 +39,7 @@ export async function GET(
 
   try {
     // Export the transcription
-    const exportedData = await exportTranscription(fileId, authResult.userId, format);
+    const exportedData = await exportTranscription(fileId, format);
     
     // Set appropriate content type and filename
     const contentType = format === 'txt' ? 'text/plain' : 'application/x-subrip';

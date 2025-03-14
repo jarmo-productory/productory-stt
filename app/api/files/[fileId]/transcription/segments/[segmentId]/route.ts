@@ -94,7 +94,6 @@ export async function PUT(
 
     const updatedSegment = await updateTranscriptionSegment(
       segmentId,
-      authResult.userId,
       updates
     );
 
