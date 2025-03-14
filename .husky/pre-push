@@ -1,0 +1,20 @@
+#!/bin/sh
+
+# This hook runs more comprehensive checks before pushing to the remote repository
+# It's similar to what your CI/CD pipeline might run
+
+echo "🚀 Running pre-push checks..."
+
+# Run ESLint with strict checking (no warnings allowed)
+echo "🔍 Running ESLint in strict mode..."
+npm run lint:strict || { echo "❌ ESLint check failed. Please fix the errors before pushing."; exit 1; }
+
+# Run TypeScript type checking on the entire project
+echo "🔎 Running TypeScript type checking..."
+npm run typecheck || { echo "❌ TypeScript check failed. Please fix the type errors before pushing."; exit 1; }
+
+# Run tests
+echo "🧪 Running tests..."
+npm run test || { echo "❌ Tests failed. Please fix the failing tests before pushing."; exit 1; }
+
+echo "✅ All checks passed! Pushing to remote repository..."

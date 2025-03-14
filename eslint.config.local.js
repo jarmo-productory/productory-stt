@@ -1,7 +1,7 @@
 // Local development ESLint Flat Config
 // This is a more relaxed version of eslint.config.js for local development
 
-import nextPlugin from 'eslint-plugin-next';
+import nextPlugin from '@next/eslint-plugin-next';
 import importPlugin from 'eslint-plugin-import';
 import typescriptPlugin from '@typescript-eslint/eslint-plugin';
 import typescriptParser from '@typescript-eslint/parser';
@@ -53,7 +53,7 @@ export default [
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
     plugins: {
-      next: nextPlugin,
+      '@next/next': nextPlugin,
       import: importPlugin,
       '@typescript-eslint': typescriptPlugin,
       'unused-imports': unusedImportsPlugin,
