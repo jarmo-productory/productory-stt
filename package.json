@@ -18,7 +18,10 @@
     "test:watch": "vitest",
     "prepare": "husky",
     "check-config": "node scripts/check-config-consistency.js",
-    "count-errors": "node scripts/count-errors.js"
+    "count-errors": "node scripts/count-errors.js",
+    "deploy:render": "node scripts/deploy-to-render.js",
+    "export:env": "node scripts/export-env-for-render.js",
+    "test:render": "node scripts/test-render-deployment.js"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [

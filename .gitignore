@@ -78,3 +78,12 @@ logs
 .docs/
 audio-files/
 scripts/test-audio-16k-mono.wav
+
+# Local Netlify folder
+.netlify
+
+# Render deployment
+/tmp
+render-env-vars.json
+render-env-vars.csv
+render.env

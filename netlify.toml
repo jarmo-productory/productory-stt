@@ -39,13 +39,12 @@
   status = 200
   force = true
 
-# Handle 404s for static assets
+# Handle all routes with Next.js
 [[redirects]]
   from = "/*"
-  to = "/index.html"
+  to = "/.netlify/functions/nextjs-server"
   status = 200
   force = false
-  conditions = {Response = {status = [404]}}
 
 # Headers to set
 [[headers]]

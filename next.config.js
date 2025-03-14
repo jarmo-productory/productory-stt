@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Output configuration for Netlify
+  // Output configuration for server deployment
   output: 'standalone',
 
   // Security headers from next.config.ts
