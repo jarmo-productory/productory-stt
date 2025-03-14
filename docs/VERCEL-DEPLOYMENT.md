@@ -85,6 +85,44 @@ You can monitor the application using:
 - Vercel CLI: `vercel logs`
 - Vercel Analytics (if enabled)
 
+## Redeployment
+
+To redeploy your application, you can use any of these methods:
+
+### Using Git
+
+The simplest way to trigger a redeployment is to push a new commit to your repository:
+
+```bash
+git add .
+git commit -m "Trigger redeployment"
+git push origin main
+```
+
+### Using Vercel CLI
+
+You can also redeploy directly using the Vercel CLI:
+
+```bash
+# Deploy the current directory
+vercel
+
+# Deploy to production
+vercel --prod
+
+# Force a new deployment even if no changes are detected
+vercel --force
+```
+
+### Using Vercel Dashboard
+
+You can manually trigger a redeployment from the Vercel dashboard by:
+1. Going to your project
+2. Clicking on the "Deployments" tab
+3. Finding the deployment you want to redeploy
+4. Clicking the three dots menu (⋮)
+5. Selecting "Redeploy"
+
 ## Environment Variables
 
 The following environment variables are recommended:
