@@ -16,25 +16,9 @@
 [context.branch-deploy]
   environment = { NODE_ENV = "production" }
 
-# Next.js specific handling
+# Next.js adapter for Next.js 15
 [[plugins]]
   package = "@netlify/plugin-nextjs"
-
-# Required for Next.js routing
-[[redirects]]
-  from = "/_next/*"
-  to = "/_next/:splat"
-  status = 200
-
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/nextjs-server/api/:splat"
-  status = 200
-
-[[redirects]]
-  from = "/*"
-  to = "/.netlify/functions/nextjs-server"
-  status = 200
 
 # Headers to set
 [[headers]]

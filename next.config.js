@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Output configuration for Netlify
+  output: 'standalone',
+
   // Security headers from next.config.ts
   headers: async () => [
     {
