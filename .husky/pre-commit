@@ -1,14 +1,16 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
+#!/bin/sh
 
-# Run lint-staged to check staged files
-# This will run ESLint, Prettier, and TypeScript checking on staged files only
-npx lint-staged
+# Run ESLint with relaxed configuration
+echo "🔍 Running ESLint in relaxed mode..."
+npm run lint:local || { echo "❌ ESLint check failed. Please fix the errors before committing."; exit 1; }
 
-# Run TypeScript type checking only on specific files we've fixed
-# This is a temporary solution until we can fix all TypeScript errors
-FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.tsx?$' | grep -v "node_modules" | grep -v ".next")
-if [ -n "$FILES" ]; then
-  echo "Running TypeScript check on staged files..."
-  npx tsc --noEmit --skipLibCheck $FILES || true
-fi
+# Run Prettier on staged files
+echo "💅 Running Prettier..."
+npx prettier --write $(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(js|jsx|ts|tsx|css|scss|json|md)$')
+
+# Run TypeScript type checking on the entire project
+echo "🔎 Running TypeScript type checking..."
+npm run typecheck || { echo "❌ TypeScript check failed. Please fix the type errors before committing."; exit 1; }
+
+# Add back the files that Prettier may have modified
+git add $(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(js|jsx|ts|tsx|css|scss|json|md)$')

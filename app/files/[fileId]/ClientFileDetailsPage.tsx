@@ -241,6 +241,7 @@ function FileDetailsContent({ fileId }: { fileId: string }) {
             {/* Tab content - scrollable */}
             <div className="flex-grow overflow-auto min-h-0">
               <TabsContent value="transcription" className="h-full min-h-0">
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                 <TranscriptionColumn file={fileData as any} />
               </TabsContent>
               

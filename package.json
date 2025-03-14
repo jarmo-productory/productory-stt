@@ -2,13 +2,16 @@
   "name": "you-can-build-anything",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "lint:strict": "eslint --max-warnings=0 .",
-    "lint:fix": "eslint --fix .",
+    "lint": "eslint --config eslint.config.js .",
+    "lint:strict": "eslint --config eslint.config.js --max-warnings=0 .",
+    "lint:fix": "eslint --config eslint.config.js --fix .",
+    "lint:local": "eslint --config eslint.config.local.js .",
+    "lint:local:fix": "eslint --config eslint.config.local.js --fix .",
     "typecheck": "tsc --noEmit",
     "typecheck:staged": "tsc-files --noEmit",
     "create-component": "node scripts/create-component.js",
@@ -16,11 +19,16 @@
     "worker:continuous": "node scripts/run-worker.js --continuous",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepare": "husky"
+    "prepare": "husky",
+    "check-config": "node scripts/check-config-consistency.js",
+    "count-errors": "node scripts/count-errors.js"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
       "eslint --max-warnings=0",
+      "prettier --write"
+    ],
+    "*.{json,md,css,scss}": [
       "prettier --write"
     ]
   },
@@ -87,6 +95,7 @@
     "depcheck": "^1.4.7",
     "eslint": "^9",
     "eslint-config-next": "15.1.3",
+    "eslint-plugin-next": "^0.0.0",
     "eslint-plugin-unused-imports": "^4.1.4",
     "husky": "^9.1.7",
     "jsdom": "^26.0.0",

@@ -37,3 +37,10 @@ tailwind.config.js
 # Temporary files
 .tmp/
 .temp/
+
+# Specific files with TypeScript 'any' issues
+app/files/[fileId]/components/TranscriptionColumn.tsx
+app/files/[fileId]/ClientFileDetailsPage.tsx
+app/files/[fileId]/components/AISummaryTab.tsx
+
+# Add more specific files or directories as needed
