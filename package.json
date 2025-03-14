@@ -14,7 +14,14 @@
     "worker": "node scripts/run-worker.js",
     "worker:continuous": "node scripts/run-worker.js --continuous",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --max-warnings=0",
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "@floating-ui/react": "^0.27.4",
@@ -76,10 +83,14 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/react-scroll": "^1.8.10",
+    "depcheck": "^1.4.7",
     "eslint": "^9",
     "eslint-config-next": "15.1.3",
+    "husky": "^9.1.7",
     "jsdom": "^26.0.0",
+    "lint-staged": "^15.5.0",
     "postcss": "^8",
+    "prettier": "^3.5.3",
     "tailwindcss": "^3.4.1",
     "typescript": "^5",
     "vitest": "^3.0.8"

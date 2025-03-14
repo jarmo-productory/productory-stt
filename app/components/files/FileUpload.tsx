@@ -2,7 +2,6 @@
 
 import { useState, useRef, ChangeEvent, DragEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useFiles } from '@/contexts/FileContext';
 import { useSupabase } from '@/hooks/useSupabase';
 import { 
   Upload,

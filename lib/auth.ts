@@ -10,16 +10,14 @@ export type AuthResult = {
 
 /**
  * Authenticates a request and returns the user ID if authenticated
- * @param req The Next.js request object
+ * @param _req The Next.js request object (unused but kept for compatibility)
  * @returns Object containing userId if authenticated, or error details
  */
-export async function authenticateRequest(req: NextRequest): Promise<AuthResult> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function authenticateRequest(_req: NextRequest): Promise<AuthResult> {
   try {
-    // In Next.js 15, cookies() is an async function that should be awaited
-    const cookieStore = await cookies();
-    
     // Use the official Supabase auth helper for route handlers
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = createRouteHandlerClient({ cookies });
     
     // Get the session using the built-in method
     const { data: { session }, error } = await supabase.auth.getSession();

@@ -1,4 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
 import { 
   getNextPendingJob, 
   updateJobStatus, 
@@ -9,12 +8,6 @@ import {
   TranscriptionJobPayload
 } from './jobs';
 import { processTranscription } from './transcriptions';
-
-// Initialize Supabase client with service role key
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 /**
  * Processes a transcription job

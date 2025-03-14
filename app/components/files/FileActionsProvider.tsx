@@ -86,8 +86,7 @@ export function FileActionsProvider({ children }: { children: ReactNode }) {
       const updatedFile = await FileService.renameFile(
         selectedFile.id,
         selectedFile,
-        newName,
-        user.id
+        newName
       );
 
       if (updatedFile) {

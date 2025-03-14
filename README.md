@@ -20,6 +20,7 @@ Full Video Guide: https://www.youtube.com/watch?v=ad1BxZufer8&list=PLE9hy4A7ZTmp
 - 🛡️ TypeScript support
 - 📊 Error boundary implementation
 - 🔍 SEO optimized
+- 🧹 Comprehensive linting and code quality tools
 
 ## 🚀 Getting Started
 
@@ -316,3 +317,16 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 ---
 
 Made with 🔥 by [ShenSeanChen](https://github.com/ShenSeanChen)
+
+## �� Code Quality
+
+This project includes a comprehensive setup for code quality:
+
+- **ESLint**: Static code analysis
+- **TypeScript**: Strong type checking
+- **Prettier**: Code formatting
+- **Husky**: Git hooks for pre-commit checks
+- **lint-staged**: Run linters on staged files only
+- **GitHub Actions**: CI/CD checks
+
+For more details, see [LINTING.md](LINTING.md).

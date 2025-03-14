@@ -1,24 +1,12 @@
 "use client";
 
-// import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '@/utils/supabase';
-import { useAuth } from '@/contexts/AuthContext';
-import { FileProvider, useFiles, FileObject } from '@/contexts/FileContext';
+import { FileProvider, useFiles } from '@/contexts/FileContext';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useSubscription } from '@/hooks/useSubscription';
-// import { OnboardingTour } from '@/components/OnboardingTour';
-import { useTrialStatus } from '@/hooks/useTrialStatus';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { 
-  Check,
-  AlertCircle,
-  X,
   Loader2,
   FileAudio,
-  FolderPlus,
-  Upload,
   RefreshCw
 } from 'lucide-react';
 
@@ -26,21 +14,16 @@ import {
 import { FileUpload } from '@/app/components/files/FileUpload';
 import { AppLayout } from "@/app/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { FileList } from '@/app/components/files/FileList';
 
-const AUTH_TIMEOUT = 15000; // 15 seconds
-
 // Create a wrapper component to access the FileContext
 function DashboardContent() {
-  const { user } = useAuth();
   const router = useRouter();
-  const { files, refreshFiles, isLoading: filesLoading, deleteFile } = useFiles();
+  const { files, refreshFiles, isLoading: filesLoading } = useFiles();
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   
   // Check if user has files
   const hasFiles = files.length > 0;
@@ -87,19 +70,6 @@ function DashboardContent() {
     }, 1000);
   }, [refreshFiles, router]);
   
-  // Handle manual refresh
-  const handleRefresh = useCallback(() => {
-    setIsRefreshing(true);
-    refreshFiles();
-    setTimeout(() => setIsRefreshing(false), 1000);
-  }, [refreshFiles]);
-  
-  // Handle file selection
-  const handleFileSelect = useCallback((file: FileObject) => {
-    setSelectedFileId(file.id);
-    router.push(`/files/${file.id}`);
-  }, [router]);
-  
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -140,7 +110,6 @@ function DashboardContent() {
       ) : hasFiles ? (
         <FileList
           files={files}
-          onDeleteFile={deleteFile}
           folderId={null}
         />
       ) : filesLoading ? (
@@ -158,7 +127,6 @@ function DashboardContent() {
 }
 
 export default function DashboardPage() {
-  const { user, isLoading: isAuthLoading } = useAuth();
   const [isPageLoading, setIsPageLoading] = useState(true);
 
   // Initialize - check auth once

@@ -11,15 +11,19 @@ import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 
 interface FileActionsMenuProps {
   file: FileObject;
+  onStartRename?: () => void;
 }
 
-export function FileActionsMenu({ file }: FileActionsMenuProps) {
+export function FileActionsMenu({ file, onStartRename }: FileActionsMenuProps) {
   const { openDeleteModal, openRenameModal, setSelectedFile } = useFileActions();
 
   // Handlers for specific actions with separate functions to make debugging easier
   const handleRenameClick = () => {
     setSelectedFile(file);
     openRenameModal(file);
+    if (onStartRename) {
+      onStartRename();
+    }
   };
 
   const handleDeleteClick = () => {

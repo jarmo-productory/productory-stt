@@ -1,14 +1,16 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, Session, AuthError } from '@supabase/supabase-js';
+import { User, Session } from '@supabase/supabase-js';
 import { useSupabase } from '@/hooks/useSupabase';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
   error: string | null;
+  supabase: SupabaseClient;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
@@ -168,6 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     isLoading,
     error,
+    supabase,
     signInWithEmail,
     signUpWithEmail,
     signInWithGoogle,

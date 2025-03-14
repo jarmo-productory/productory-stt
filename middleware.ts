@@ -26,7 +26,7 @@ export async function middleware(request: NextRequest) {
     const supabase = createMiddlewareClient({ req: request, res: response });
     
     // Check if there's a session
-    const { data: { session }, error } = await supabase.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
     
     // Log the status - for debugging
     console.log(`[Middleware] Path: ${path}, Session:`, session ? 'exists' : 'none');
@@ -36,8 +36,7 @@ export async function middleware(request: NextRequest) {
     response.headers.set('x-auth-state', session ? 'authenticated' : 'unauthenticated');
     response.headers.set('x-requested-path', path);
     
-    // Define public and protected routes
-    const isPublicRoute = path === '/' || path === '/login' || path === '/signup';
+    // Define protected routes
     const isProtectedRoute = path.startsWith('/dashboard') || 
                             path.startsWith('/folders') || 
                             path.startsWith('/files') || 

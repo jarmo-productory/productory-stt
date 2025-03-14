@@ -13,19 +13,12 @@ interface Breadcrumb {
   active?: boolean;
 }
 
-interface FolderInfo {
-  id: string;
-  name: string;
-  parent_id: string | null;
-}
-
 interface BreadcrumbsProps {
   items?: Breadcrumb[];
 }
 
 export function Breadcrumbs({ items }: BreadcrumbsProps = {}) {
   const pathname = usePathname();
-  const [folders, setFolders] = useState<FolderInfo[]>([]);
   const [folderHierarchy, setFolderHierarchy] = useState<Breadcrumb[]>([]);
   
   // Fetch folder information for the current path
@@ -54,8 +47,6 @@ export function Breadcrumbs({ items }: BreadcrumbsProps = {}) {
         .select('id, name, parent_id');
       
       if (data && !error) {
-        setFolders(data);
-        
         // Build folder hierarchy for the current folder
         const hierarchy: Breadcrumb[] = [];
         let folderId = currentFolderId;

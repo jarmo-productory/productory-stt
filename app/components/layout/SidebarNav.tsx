@@ -7,15 +7,13 @@ import {
   Home, 
   Folder, 
   FolderPlus,
-  ChevronDown, 
-  ChevronRight, 
   UserCircle, 
   CreditCard,
   LogOut,
   Plus,
   MoreVertical,
   Pencil,
-  Trash2
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -139,7 +137,6 @@ function FolderItem({ id, name, active, onClick, onRename, onDelete }: FolderIte
 export function SidebarNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const [foldersExpanded, setFoldersExpanded] = useState(true);
   const { user, signOut } = useAuth();
   const [folders, setFolders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
