@@ -49,7 +49,8 @@ jobs:
         run: npm install -g netlify-cli
       
       - name: Deploy to TEST
-        run: netlify deploy --prod --dir=.next --site ${{ secrets.TEST_NETLIFY_SITE_ID }} --auth ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        # Use the netlify.toml configuration file instead of specifying --dir
+        run: netlify deploy --prod --site ${{ secrets.TEST_NETLIFY_SITE_ID }} --auth ${{ secrets.NETLIFY_AUTH_TOKEN }}
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.TEST_NETLIFY_SITE_ID }} 
