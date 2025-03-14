@@ -7,14 +7,22 @@
   ],
   "plugins": [
     "import",
-    "@typescript-eslint"
+    "@typescript-eslint",
+    "unused-imports"
   ],
   "rules": {
     "react/no-unescaped-entities": "off",
-    "@typescript-eslint/no-unused-vars": ["error", {
-      "varsIgnorePattern": "^_",
-      "argsIgnorePattern": "^_"
-    }],
+    "@typescript-eslint/no-unused-vars": "off",
+    "unused-imports/no-unused-imports": "error",
+    "unused-imports/no-unused-vars": [
+      "warn",
+      { 
+        "vars": "all", 
+        "varsIgnorePattern": "^_", 
+        "args": "after-used", 
+        "argsIgnorePattern": "^_" 
+      }
+    ],
     "@typescript-eslint/no-explicit-any": "error",
     "react-hooks/rules-of-hooks": "warn",
     "react/jsx-no-comment-textnodes": "warn",

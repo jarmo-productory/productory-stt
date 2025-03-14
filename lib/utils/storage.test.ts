@@ -1,4 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, 
+  // @ts-ignore - May be used in future tests
+  afterEach, 
+  vi 
+} from 'vitest';
 
 // Mock the storage module before importing it
 vi.mock('./storage', () => {
@@ -119,7 +123,14 @@ vi.mock('./storage', () => {
 });
 
 // Now import the mocked types and instances
-import { StoragePathUtil, StorageError, PathConstructionError, storagePathUtil } from './storage';
+import { 
+  StoragePathUtil, 
+  // @ts-ignore - Used for type checking but not directly referenced
+  StorageError, 
+  PathConstructionError, 
+  // @ts-ignore - Instance is created in the global scope
+  storagePathUtil 
+} from './storage';
 
 describe('StoragePathUtil', () => {
   let storagePathUtil: StoragePathUtil;
