@@ -8,8 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { JobStatus } from '@/app/components/jobs/JobStatus';
-import { Combobox, ComboboxOption } from '@/components/ui/combobox';
-import { languages, getPopularLanguages, filterLanguages } from '@/app/data/languages';
+import { Combobox } from '@/components/ui/combobox';
+import { languages, getPopularLanguages } from '@/app/data/languages';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
@@ -368,7 +368,7 @@ export function TranscriptionRequest({
                   <SelectContent>
                     <SelectItem value="word">Each word</SelectItem>
                     <SelectItem value="character">Each character</SelectItem>
-                    <SelectItem value="none">Don't add timestamps</SelectItem>
+                    <SelectItem value="none">Don&apos;t add timestamps</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

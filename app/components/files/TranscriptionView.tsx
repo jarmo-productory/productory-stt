@@ -11,14 +11,6 @@ import { useAudioPlayer } from '@/app/contexts/AudioPlayerContext';
 export type TranscriptionViewProps = {
   transcriptionId: string;
   className?: string;
-  transcriptionFormats?: {
-    optimized?: {
-      path: string;
-      format: string;
-      sample_rate: number;
-      channels: number;
-    }
-  };
 };
 
 type TranscriptionSegment = {
@@ -174,7 +166,6 @@ const SpeakerSegment = ({
 export function TranscriptionView({
   transcriptionId,
   className,
-  transcriptionFormats,
 }: TranscriptionViewProps) {
   const [transcription, setTranscription] = useState<Transcription | null>(null);
   const [loading, setLoading] = useState(true);

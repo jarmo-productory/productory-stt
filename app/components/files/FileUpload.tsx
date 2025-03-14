@@ -12,11 +12,10 @@ import {
   Loader2,
   AlertCircle,
 } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { storagePathUtil } from "@/lib/utils/storage";
-import { Upload as TusUpload } from 'tus-js-client';
+import { Upload as TusUpload, PreviousUpload } from 'tus-js-client';
 
 // Supported file formats
 const SUPPORTED_FORMATS = ['.wav', '.mp3', '.m4a', '.flac'];
@@ -177,11 +176,9 @@ export function FileUpload({
 }: FileUploadProps) {
   const { user } = useAuth();
   const supabase = useSupabase();
-  const { refreshFiles } = useFiles();
   
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
-  const [uploadAreaExpanded, setUploadAreaExpanded] = useState(true);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -454,7 +451,7 @@ export function FileUpload({
             });
             
             // Check for previous uploads to resume
-            upload.findPreviousUploads().then((previousUploads: any[]) => {
+            upload.findPreviousUploads().then((previousUploads: PreviousUpload[]) => {
               if (previousUploads.length) {
                 upload.resumeFromPreviousUpload(previousUploads[0]);
               }
@@ -508,7 +505,7 @@ export function FileUpload({
         });
         
         successCount++;
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(`Error uploading file ${fileObj.name}:`, err);
         
         // Update status to error
@@ -517,7 +514,7 @@ export function FileUpload({
           updated[i] = { 
             ...updated[i], 
             status: 'error', 
-            errorMessage: err.message || 'Upload failed' 
+            errorMessage: err instanceof Error ? err.message : 'Upload failed' 
           };
           return updated;
         });
