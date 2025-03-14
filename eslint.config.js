@@ -1,15 +1,15 @@
 // ESLint Flat Config
 // This replaces the old .eslintrc.js configuration
 
-import nextPlugin from '@next/eslint-plugin-next';
-import importPlugin from 'eslint-plugin-import';
-import typescriptPlugin from '@typescript-eslint/eslint-plugin';
-import typescriptParser from '@typescript-eslint/parser';
-import unusedImportsPlugin from 'eslint-plugin-unused-imports';
-import reactHooksPlugin from 'eslint-plugin-react-hooks';
-import reactPlugin from 'eslint-plugin-react';
+// Import plugins
+const importPlugin = require('eslint-plugin-import');
+const typescriptPlugin = require('@typescript-eslint/eslint-plugin');
+const typescriptParser = require('@typescript-eslint/parser');
+const unusedImportsPlugin = require('eslint-plugin-unused-imports');
+const reactHooksPlugin = require('eslint-plugin-react-hooks');
+const reactPlugin = require('eslint-plugin-react');
 
-export default [
+module.exports = [
   // Base configurations
   {
     ignores: [
@@ -27,6 +27,7 @@ export default [
       '*.generated.*',
       '*.d.ts',
       'next.config.js',
+      'next.config.cjs',
       'postcss.config.js',
       'tailwind.config.js',
       '**/*.test.ts',
@@ -49,7 +50,6 @@ export default [
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
     plugins: {
-      '@next/next': nextPlugin,
       import: importPlugin,
       '@typescript-eslint': typescriptPlugin,
       'unused-imports': unusedImportsPlugin,
