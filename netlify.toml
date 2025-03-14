@@ -16,11 +16,15 @@
 [context.branch-deploy]
   environment = { NODE_ENV = "production" }
 
-# Redirects
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+# Next.js specific handling
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Remove the incorrect redirect
+# [[redirects]]
+#   from = "/*"
+#   to = "/index.html"
+#   status = 200
 
 # Headers to set
 [[headers]]
