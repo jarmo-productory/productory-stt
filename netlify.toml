@@ -20,6 +20,12 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+# Ensure Next.js static assets are properly served
+[[redirects]]
+  from = "/_next/static/*"
+  to = "/_next/static/:splat"
+  status = 200
+
 # Headers to set
 [[headers]]
   for = "/*"
