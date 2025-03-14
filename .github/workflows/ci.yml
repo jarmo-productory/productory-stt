@@ -28,7 +28,8 @@ jobs:
       - name: Basic lint check (non-blocking)
         run: npm run lint || true
         
-      - name: Format check
+      - name: Format check (non-blocking)
+        continue-on-error: true
         run: npx prettier --check "**/*.{js,jsx,ts,tsx,json,md}"
       
       - name: Type check

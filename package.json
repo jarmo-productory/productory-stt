@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md,css,scss}\"",
     "typecheck": "tsc --noEmit",
     "typecheck:staged": "tsc-files --noEmit",
     "create-component": "node scripts/create-component.js",
