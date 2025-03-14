@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/check-path-aliases.js && next build",
+    "build": "node scripts/check-path-aliases.js && next build && node scripts/debug-build.js && node scripts/post-build.js",
     "start": "next start",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
