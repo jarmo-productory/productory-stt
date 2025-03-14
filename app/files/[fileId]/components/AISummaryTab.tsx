@@ -119,7 +119,7 @@ export function AISummaryTab({ file }: AISummaryTabProps) {
         throw new Error(`Failed to generate summary: ${response.status}`);
       }
       
-      const data = await response.json();
+      await response.json();
       toast.success('AI summary generation started');
       
       // Poll for summary completion

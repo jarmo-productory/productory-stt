@@ -5,7 +5,7 @@ import { useFiles } from '@/contexts/FileContext';
 import { FileProvider } from '@/contexts/FileContext';
 
 export default function TestPage() {
-  const { files, deleteFile } = useFiles();
+  const { files } = useFiles();
   
   return (
     <FileProvider>
@@ -13,7 +13,6 @@ export default function TestPage() {
         <h1 className="text-2xl font-bold mb-4">Test Page</h1>
         <FileList
           files={files}
-          onDeleteFile={deleteFile}
         />
       </div>
     </FileProvider>

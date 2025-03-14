@@ -2,7 +2,7 @@
  * Helper functions for storage operations using the StoragePathUtil
  */
 import { SupabaseClient } from '@supabase/supabase-js';
-import { storagePathUtil, StorageError } from './storage';
+import { storagePathUtil } from './storage';
 
 /**
  * Result of a storage operation
@@ -42,7 +42,7 @@ export async function uploadFile(
     const bucketName = storagePathUtil.getBucketConfig().defaultBucket;
     
     // Upload to Supabase
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from(bucketName)
       .upload(filePath, file, {
         cacheControl: options.cacheControl || '3600',

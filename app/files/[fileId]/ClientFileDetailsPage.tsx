@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AppLayout } from "@/app/components/layout/AppLayout";
 import { Breadcrumbs } from "@/app/components/layout/Breadcrumbs";
 import { PageHeader } from "@/app/components/layout/PageHeader";
-import { FileAudio, FileText, StickyNote, Sparkles, Info } from "lucide-react";
+import { FileText, StickyNote, Sparkles, Info } from "lucide-react";
 import { TranscriptionColumn } from './components/TranscriptionColumn';
 import { FileObject } from "@/contexts/FileContext";
 import { useAuth } from "@/contexts/AuthContext";

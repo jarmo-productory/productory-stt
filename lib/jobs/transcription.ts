@@ -4,8 +4,6 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import FormData from 'form-data';
 import { convertWithFallback } from '../utils/audio-converter';
 import { storagePathUtil } from '../utils/storage';

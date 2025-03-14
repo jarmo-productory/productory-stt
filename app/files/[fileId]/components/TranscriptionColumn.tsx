@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FileText } from 'lucide-react';
 import { useAuth } from "@/contexts/AuthContext";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { TranscriptionRequest, TranscriptionView } from "@/app/components/files";
@@ -214,7 +213,6 @@ export function TranscriptionColumn({ file }: TranscriptionColumnProps) {
         <TranscriptionView 
           transcriptionId={transcriptionId} 
           className="w-full"
-          transcriptionFormats={transcriptionFormats}
         />
       )}
     </div>

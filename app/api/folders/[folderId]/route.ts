@@ -93,7 +93,7 @@ export async function PUT(
 
 // DELETE handler for deleting a folder
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { folderId: string } }
 ) {
   const unwrappedParams = await Promise.resolve(params);

@@ -33,6 +33,7 @@ import {
   deleteAudioFile, 
   listAudioFiles, 
   searchAudioFiles,
+  // @ts-ignore - This type is used for type checking but not directly referenced
   type AudioFile,
   addTranscriptionFormat,
   getBestTranscriptionFormat,

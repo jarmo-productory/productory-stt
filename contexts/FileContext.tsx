@@ -240,7 +240,7 @@ export function FileProvider({ children }: { children: ReactNode }) {
         
         // Update only the file_name in the database
         // The trigger will handle updating the file_path
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('audio_files')
           .update({ file_name: newName })
           .eq('id', file.id)
@@ -273,7 +273,7 @@ export function FileProvider({ children }: { children: ReactNode }) {
         return true;
       } else {
         // If we don't have file path info, just update the display name
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('audio_files')
           .update({ file_name: newName })
           .eq('id', file.id)

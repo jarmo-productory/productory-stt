@@ -21,7 +21,7 @@ const mockFolders = [
 export default function FoldersPage() {
   const router = useRouter();
   const [showCreateFolder, setShowCreateFolder] = useState(false);
-  const { files, deleteFile } = useFiles();
+  const { files } = useFiles();
   
   const handleFolderClick = (folderId: string) => {
     router.push(`/folders/${folderId}`);

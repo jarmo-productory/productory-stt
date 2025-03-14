@@ -1,5 +1,3 @@
-import { AppLayout } from "@/app/components/layout/AppLayout";
-import { Breadcrumbs } from "@/app/components/layout/Breadcrumbs";
 import ClientFileDetailsPage from './ClientFileDetailsPage';
 
 export default async function FileDetailsPage({ params }: { params: { fileId: string } }) {

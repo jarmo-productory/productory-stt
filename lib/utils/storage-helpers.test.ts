@@ -1,11 +1,15 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, 
+  // @ts-ignore - May be used in future tests
+  afterEach 
+} from 'vitest';
 import { 
   uploadFile, 
   downloadFile, 
   getFileUrl, 
-  deleteFile, 
-  getStorageErrorMessage, 
+  deleteFile,
+  getStorageErrorMessage,
   fileExists,
+  // @ts-ignore - Used for type checking but not directly referenced
   type StorageResult
 } from './storage-helpers';
 import { SupabaseClient } from '@supabase/supabase-js';

@@ -5,8 +5,7 @@ import { withCors } from '@/utils/cors';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export const GET = withCors(async function GET(request: NextRequest) {
+export const GET = withCors(async function GET(_request: NextRequest) {
   try {
     console.log('Testing Stripe connection...');
     console.log('Stripe key starts with:', process.env.STRIPE_SECRET_KEY?.substring(0, 8) + '...');

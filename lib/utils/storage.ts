@@ -123,24 +123,9 @@ export class StoragePathUtil {
   private log(level: 'info' | 'warn' | 'error', message: string, data?: any): void {
     if (!this.config.enableLogging) return;
 
-    const logData = {
-      timestamp: new Date().toISOString(),
-      level,
-      message,
-      ...data
-    };
-
-    switch (level) {
-      case 'info':
-        console.info(`[StoragePathUtil] ${message}`, data);
-        break;
-      case 'warn':
-        console.warn(`[StoragePathUtil] ${message}`, data);
-        break;
-      case 'error':
-        console.error(`[StoragePathUtil] ${message}`, data);
-        break;
-    }
+    // Log to console based on level
+    const logMethod = level === 'error' ? console.error : level === 'warn' ? console.warn : console.info;
+    logMethod(`[StoragePathUtil] ${message}`, data);
   }
 
   /**
