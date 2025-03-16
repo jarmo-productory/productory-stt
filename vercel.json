@@ -3,16 +3,8 @@
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
-  "env": [
-    {
-      "key": "NODE_ENV",
-      "value": "production",
-      "target": ["production", "preview"]
-    },
-    {
-      "key": "NEXT_TELEMETRY_DISABLED",
-      "value": "1",
-      "target": ["production", "preview", "development"]
-    }
-  ]
+  "env": {
+    "NODE_ENV": "production",
+    "NEXT_TELEMETRY_DISABLED": "1"
+  }
 }
