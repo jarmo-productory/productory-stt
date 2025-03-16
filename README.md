@@ -336,3 +336,11 @@ This project includes a comprehensive setup for code quality:
 - **GitHub Actions**: CI/CD checks
 
 For more details, see [LINTING.md](LINTING.md).
+
+## Deployment
+
+This project is configured for deployment on Vercel. Make sure the following environment variables are set in your Vercel project:
+
+- `NEXT_PUBLIC_SUPABASE_URL`: The URL of your Supabase project
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: The anonymous key for your Supabase project
+- `SUPABASE_SERVICE_ROLE_KEY`: The service role key for your Supabase project (for server-side operations)
