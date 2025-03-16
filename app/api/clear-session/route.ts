@@ -7,22 +7,25 @@ import { NextResponse } from 'next/server';
  */
 export async function POST() {
   try {
-    // Create a Supabase client
-    const supabase = createRouteHandlerClient({ cookies: () => cookies() });
-    
+    // Create a Supabase client with proper Next.js 15 cookie handling
+    const supabase = createRouteHandlerClient({ cookies });
+
     // Sign out the user to clear the session
     await supabase.auth.signOut();
-    
+
     // Return success response
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       message: 'Session cleared successfully',
     });
   } catch (error) {
     console.error('Error clearing session:', error);
-    return NextResponse.json({ 
-      success: false, 
-      message: 'Failed to clear session' 
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        message: 'Failed to clear session',
+      },
+      { status: 500 }
+    );
   }
-} 
+}

@@ -32,19 +32,17 @@ export async function PUT(
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json(
-      { error: 'Invalid request body' },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
   // Validate request body
-  if (!body || (
-    typeof body.text !== 'string' && 
-    typeof body.speaker_id !== 'string' && 
-    typeof body.start_time !== 'number' && 
-    typeof body.end_time !== 'number'
-  )) {
+  if (
+    !body ||
+    (typeof body.text !== 'string' &&
+      typeof body.speaker_id !== 'string' &&
+      typeof body.start_time !== 'number' &&
+      typeof body.end_time !== 'number')
+  ) {
     return NextResponse.json(
       { error: 'At least one valid update field is required' },
       { status: 400 }
@@ -52,8 +50,7 @@ export async function PUT(
   }
 
   // Initialize Supabase client
-  const cookieStore = cookies();
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+  const supabase = createRouteHandlerClient({ cookies });
 
   try {
     // Verify that the segment belongs to the file's transcription
@@ -64,10 +61,7 @@ export async function PUT(
       .single();
 
     if (segmentError) {
-      return NextResponse.json(
-        { error: 'Segment not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
     }
 
     // Verify that the segment's transcription belongs to the file
@@ -89,20 +83,14 @@ export async function PUT(
       text: body.text,
       speaker_id: body.speaker_id,
       start_time: body.start_time,
-      end_time: body.end_time
+      end_time: body.end_time,
     };
 
-    const updatedSegment = await updateTranscriptionSegment(
-      segmentId,
-      updates
-    );
+    const updatedSegment = await updateTranscriptionSegment(segmentId, updates);
 
     return NextResponse.json(updatedSegment);
   } catch (error) {
     console.error('Error updating transcription segment:', error);
-    return NextResponse.json(
-      { error: 'Failed to update transcription segment' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to update transcription segment' }, { status: 500 });
   }
-} 
+}

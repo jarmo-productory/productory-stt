@@ -26,6 +26,20 @@ function LoginContent() {
   const [isLoading, setIsLoading] = useState(true); // Start with loading true
   const [isInRedirectLoop, setIsInRedirectLoop] = useState(false);
 
+  // Handle auth code - if the URL has a code but is not at the callback endpoint
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get('code');
+
+      if (code) {
+        console.log('[Auth] Code detected on login page, redirecting to callback handler');
+        // Redirect to the proper callback URL with the code
+        window.location.href = `/auth/callback?code=${code}`;
+      }
+    }
+  }, []);
+
   // CRITICAL FIX: Detect and break redirect loops
   useEffect(() => {
     // Only run on client side
